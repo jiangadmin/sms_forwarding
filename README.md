@@ -10,7 +10,7 @@
 
 > 视频教程：[B站视频](https://www.bilibili.com/video/BV1cSmABYEiX)
 
-<img src="assets/photo.png" width="200" />
+<img src="assets/front.png" width="200" /><img src="assets/back.png" width="200" /><img src="assets/right.png" width="200" />
 
 ## 功能
 
@@ -107,3 +107,12 @@ ESP32C3 与 ML307R-DC 通过串口（UART）连接，接线如下：
 - **pdulib** by David Henry
 
 需要在`Arduino IDE`中安装ESP32开发板支持，参考[官方文档](https://docs.espressif.com/projects/arduino-esp32/en/latest/installing.html)，版型选`MakerGO ESP32 C3 SuperMini`。
+
+## UI更新
+
+<img src="assets/wifi_ap.png" width="600" />
+<img src="assets/wifi.png" width="600" />
+<img src="assets/choose_wifi.png" width="600" />
+<img src="assets/connect_wifi.png" width="600" />
+<img src="assets/index.png" width="600" />
+<img src="assets/email.png" width="600" />

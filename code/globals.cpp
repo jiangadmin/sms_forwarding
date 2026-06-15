@@ -11,3 +11,8 @@ bool timeSynced = false;
 bool modemReady = false;
 unsigned long lastPrintTime = 0;
 ConcatSms concatBuffer[MAX_CONCAT_MESSAGES];
+
+bool inApConfigMode = false;
+String scannedWifiListHtml = "";
+bool wifiConfigSubmitted = false;
+unsigned long wifiConfigSubmittedTime = 0;

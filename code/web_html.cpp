@@ -7,150 +7,256 @@ const char* htmlPage = R"rawliteral(
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SMS Forwarding</title>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
-      --ink: #171717;
-      --body: #4d4d4d;
-      --mute: #888888;
-      --canvas: #ffffff;
-      --canvas-soft: #fafafa;
-      --canvas-soft-2: #f5f5f5;
-      --hairline: #ebebeb;
-      --hairline-strong: #a1a1a1;
-      --link: #0070f3;
-      --error: #ee0000;
-      --warning-soft: #ffefcf;
+      --ink: #f3f4f6;
+      --body: #d1d5db;
+      --mute: #9ca3af;
+      --canvas: rgba(255, 255, 255, 0.03);
+      --canvas-soft: #090d16;
+      --canvas-soft-2: rgba(255, 255, 255, 0.06);
+      --hairline: rgba(255, 255, 255, 0.08);
+      --hairline-strong: rgba(255, 255, 255, 0.15);
+      --link: #8b5cf6;
+      --error: #ef4444;
+      --warning-soft: rgba(245, 158, 11, 0.1);
       --sidebar-w: 220px;
-      --radius-sm: 6px;
-      --radius-md: 8px;
+      --radius-sm: 8px;
+      --radius-md: 16px;
       --radius-pill: 100px;
-      --shadow-card: 0 0 0 1px rgba(0,0,0,0.08), 0 1px 1px rgba(0,0,0,0.02), 0 2px 2px rgba(0,0,0,0.04);
+      --shadow-card: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       font-size: 14px; font-weight: 400; line-height: 1.5;
       color: var(--ink); background: var(--canvas-soft);
       display: flex; min-height: 100vh;
+      overflow-x: hidden; position: relative;
     }
+    body::before, body::after {
+      content: '';
+      position: absolute;
+      width: 400px;
+      height: 400px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+      filter: blur(150px);
+      opacity: 0.08;
+      z-index: 0;
+      pointer-events: none;
+    }
+    body::before { top: -100px; right: -100px; }
+    body::after { bottom: -100px; left: calc(var(--sidebar-w) - 100px); }
 
     /* Sidebar */
     .sidebar {
       position: fixed; top: 0; left: 0; bottom: 0; width: var(--sidebar-w);
-      background: var(--ink); display: flex; flex-direction: column;
+      background: rgba(10, 15, 28, 0.6);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-right: 1px solid var(--hairline);
+      display: flex; flex-direction: column;
       z-index: 100; overflow-y: auto;
     }
-    .sidebar-brand { padding: 22px 18px 16px; border-bottom: 1px solid rgba(255,255,255,0.08); }
-    .sidebar-brand h2 { font-size: 17px; font-weight: 600; color: #fff; letter-spacing: -0.4px; }
-    .sidebar-brand span { font-size: 10px; color: rgba(255,255,255,0.4); display: block; margin-top: 1px; font-family: 'SF Mono','Cascadia Code','JetBrains Mono','Consolas',monospace; }
+    .sidebar-brand { padding: 22px 18px 16px; border-bottom: 1px solid var(--hairline); }
+    .sidebar-brand h2 { font-size: 17px; font-weight: 700; color: #fff; letter-spacing: -0.4px; }
+    .sidebar-brand span { font-size: 10px; color: rgba(255,255,255,0.4); display: block; margin-top: 2px; font-family: 'SF Mono',monospace; }
     .sidebar-nav { flex: 1; padding: 10px; }
     .sidebar-nav a {
-      display: flex; align-items: center; gap: 10px; padding: 9px 12px;
+      display: flex; align-items: center; gap: 10px; padding: 10px 14px;
       border-radius: var(--radius-sm); color: rgba(255,255,255,0.6);
       font-size: 13px; font-weight: 500; text-decoration: none;
-      transition: all 0.12s; margin-bottom: 1px; cursor: pointer;
+      transition: all 0.2s ease; margin-bottom: 2px; cursor: pointer;
+      border: 1px solid transparent;
     }
-    .sidebar-nav a:hover { background: rgba(255,255,255,0.07); color: rgba(255,255,255,0.85); }
-    .sidebar-nav a.active { background: rgba(255,255,255,0.12); color: #fff; }
+    .sidebar-nav a:hover { background: rgba(255,255,255,0.05); color: rgba(255,255,255,0.9); }
+    .sidebar-nav a.active {
+      background: linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(168, 85, 247, 0.15) 100%);
+      border: 1px solid rgba(139, 92, 246, 0.3);
+      color: #fff;
+    }
     .sidebar-nav a .ico { font-size: 15px; width: 20px; text-align: center; flex-shrink: 0; }
-    .sidebar-divider { height: 1px; background: rgba(255,255,255,0.08); margin: 8px 12px; }
-    .sidebar-section-label { font-size: 10px; color: rgba(255,255,255,0.3); padding: 4px 16px 6px; text-transform: uppercase; letter-spacing: 0.6px; font-family: 'SF Mono','Cascadia Code','JetBrains Mono','Consolas',monospace; }
-    .sidebar-footer { padding: 12px 16px; border-top: 1px solid rgba(255,255,255,0.08); }
+    .sidebar-divider { height: 1px; background: var(--hairline); margin: 8px 12px; }
+    .sidebar-section-label { font-size: 10px; color: rgba(255,255,255,0.3); padding: 6px 14px 4px; text-transform: uppercase; letter-spacing: 0.6px; font-family: 'SF Mono',monospace; }
+    .sidebar-footer { padding: 12px 16px; border-top: 1px solid var(--hairline); }
     .sidebar-footer .btn { width: 100%; }
 
     /* Main */
     .main {
       margin-left: var(--sidebar-w); flex: 1; padding: 32px;
-      max-width: 780px; width: 100%;
+      max-width: 840px; width: 100%; position: relative; z-index: 1;
     }
-    .page-title { font-size: 22px; font-weight: 600; color: var(--ink); letter-spacing: -0.5px; margin-bottom: 6px; }
+    .page-title {
+      font-size: 26px; font-weight: 700;
+      background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      letter-spacing: -0.5px; margin-bottom: 6px;
+    }
     .page-subtitle { font-size: 13px; color: var(--mute); margin-bottom: 24px; }
 
     /* Card */
-    .card { background: var(--canvas); border-radius: var(--radius-md); box-shadow: var(--shadow-card); margin-bottom: 18px; }
-    .card-header { padding: 16px 22px 0; font-size: 14px; font-weight: 600; color: var(--ink); letter-spacing: -0.2px; display: flex; align-items: center; gap: 8px; }
-    .card-body { padding: 16px 22px 22px; }
+    .card {
+      background: var(--canvas);
+      border: 1px solid var(--hairline);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-card);
+      margin-bottom: 18px;
+    }
+    .card-header { padding: 18px 22px 0; font-size: 15px; font-weight: 600; color: var(--ink); letter-spacing: -0.2px; display: flex; align-items: center; gap: 8px; }
+    .card-body { padding: 18px 22px 22px; }
     .card-header + .card-body { padding-top: 12px; }
 
     /* Panel hide/show */
     .panel { display: none; }
-    .panel.active { display: block; }
+    .panel.active { display: block; animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
 
     /* Form */
-    .form-group { margin-bottom: 14px; }
+    .form-group { margin-bottom: 16px; }
     .form-group:last-child { margin-bottom: 0; }
-    .form-label { display: block; font-size: 12px; font-weight: 500; color: var(--body); margin-bottom: 4px; letter-spacing: -0.1px; }
+    .form-label { display: block; font-size: 12px; font-weight: 500; color: var(--body); margin-bottom: 6px; letter-spacing: 0.2px; }
     .form-input, .form-select, .form-textarea {
-      width: 100%; padding: 7px 11px; font-size: 13px; font-family: inherit;
+      width: 100%; padding: 9px 12px; font-size: 13px; font-family: inherit;
       border: 1px solid var(--hairline); border-radius: var(--radius-sm);
-      background: var(--canvas); color: var(--ink);
-      transition: border-color 0.15s, box-shadow 0.15s; outline: none;
+      background: rgba(255, 255, 255, 0.05); color: var(--ink);
+      transition: all 0.2s ease; outline: none;
     }
-    .form-input:focus, .form-select:focus, .form-textarea:focus { border-color: var(--ink); box-shadow: 0 0 0 1px var(--ink); }
+    .form-input:focus, .form-select:focus, .form-textarea:focus {
+      border-color: #8b5cf6;
+      box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.25);
+    }
     .form-select { cursor: pointer; }
-    .form-textarea { resize: vertical; min-height: 70px; line-height: 1.5; }
-    .form-hint { font-size: 11px; color: var(--mute); margin-top: 3px; line-height: 1.4; }
-    .form-warning { font-size: 11px; color: #ab570a; background: var(--warning-soft); padding: 9px 12px; border-radius: var(--radius-sm); margin-bottom: 14px; line-height: 1.5; }
+    .form-select option { background-color: #090d16; color: #f3f4f6; }
+    .form-textarea { resize: vertical; min-height: 80px; line-height: 1.5; }
+    .form-hint { font-size: 11px; color: var(--mute); margin-top: 4px; line-height: 1.4; }
+    .form-warning {
+      font-size: 12px; color: #fbbf24;
+      background: rgba(245, 158, 11, 0.1);
+      border: 1px solid rgba(245, 158, 11, 0.2);
+      padding: 10px 14px; border-radius: var(--radius-sm);
+      margin-bottom: 14px; line-height: 1.5;
+    }
     .form-row { display: flex; gap: 14px; }
     .form-row .form-group { flex: 1; }
 
     /* Buttons */
     .btn {
       display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-      padding: 7px 14px; font-size: 13px; font-weight: 500; font-family: inherit;
+      padding: 8px 16px; font-size: 13px; font-weight: 600; font-family: inherit;
       border-radius: var(--radius-pill); border: none; cursor: pointer;
-      transition: all 0.15s; line-height: 1.4; white-space: nowrap;
+      transition: all 0.2s ease; line-height: 1.4; white-space: nowrap;
     }
     .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-    .btn-primary { background: var(--ink); color: #fff; }
-    .btn-primary:hover { background: #2a2a2a; }
-    .btn-secondary { background: var(--canvas); color: var(--ink); box-shadow: 0 0 0 1px var(--hairline); }
-    .btn-secondary:hover { background: var(--canvas-soft-2); }
-    .btn-danger { background: var(--error); color: #fff; }
-    .btn-danger:hover { background: #c50000; }
-    .btn-sm { padding: 4px 10px; font-size: 12px; border-radius: var(--radius-sm); }
-    .btn-white { background: #fff; color: var(--ink); }
-    .btn-white:hover { background: #f0f0f0; }
+    .btn-primary {
+      background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+      color: #fff;
+      box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2);
+    }
+    .btn-primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 16px rgba(99, 102, 241, 0.3);
+      filter: brightness(1.1);
+    }
+    .btn-primary:active { transform: translateY(0); }
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--ink);
+      border: 1px solid var(--hairline);
+    }
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.1);
+      transform: translateY(-1px);
+    }
+    .btn-secondary:active { transform: translateY(0); }
+    .btn-danger {
+      background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%);
+      color: #fff;
+      box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2);
+    }
+    .btn-danger:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 16px rgba(239, 68, 68, 0.3);
+      filter: brightness(1.1);
+    }
+    .btn-danger:active { transform: translateY(0); }
+    .btn-sm { padding: 5px 10px; font-size: 12px; border-radius: var(--radius-sm); }
+    .btn-white { background: #fff; color: #090d16; }
+    .btn-white:hover { background: #e5e7eb; transform: translateY(-1px); }
+    .btn-white:active { transform: translateY(0); }
     .btn-block { width: 100%; justify-content: center; }
     .btn-save { padding: 10px 20px; font-size: 14px; margin-top: 4px; }
 
     /* Push Channel */
-    .push-channel { border: 1px solid var(--hairline); border-radius: var(--radius-md); padding: 14px; margin-bottom: 10px; background: var(--canvas-soft); transition: border-color 0.15s; }
-    .push-channel:hover { border-color: var(--hairline-strong); }
+    .push-channel {
+      border: 1px solid var(--hairline); border-radius: var(--radius-sm);
+      padding: 14px; margin-bottom: 10px; background: rgba(255, 255, 255, 0.01);
+      transition: all 0.2s ease;
+    }
+    .push-channel:hover { border-color: rgba(139, 92, 246, 0.3); }
     .push-channel-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
     .push-channel-header label { font-size: 13px; font-weight: 600; color: var(--ink); cursor: pointer; }
-    .push-channel-header input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--ink); }
+    .push-channel-header input[type="checkbox"] { width: 15px; height: 15px; accent-color: #8b5cf6; }
     .push-channel-body { display: none; }
     .push-channel.enabled .push-channel-body { display: block; }
-    .push-channel.enabled { border-color: var(--hairline-strong); background: var(--canvas); }
+    .push-channel.enabled { border-color: rgba(139, 92, 246, 0.3); background: rgba(139, 92, 246, 0.03); }
     .push-channel-body .form-group { margin-bottom: 12px; }
     .push-channel-body .form-group:last-child { margin-bottom: 0; }
-    .push-channel-body label { display: block; font-size: 12px; font-weight: 500; color: var(--body); margin-bottom: 4px; letter-spacing: -0.1px; }
+    .push-channel-body label { display: block; font-size: 12px; font-weight: 500; color: var(--body); margin-bottom: 6px; letter-spacing: 0.1px; }
     .push-channel-body input[type="text"], .push-channel-body input[type="password"], .push-channel-body select, .push-channel-body textarea {
-      width: 100%; padding: 7px 11px; font-size: 13px; font-family: inherit;
+      width: 100%; padding: 8px 12px; font-size: 13px; font-family: inherit;
       border: 1px solid var(--hairline); border-radius: var(--radius-sm);
-      background: var(--canvas); color: var(--ink);
-      transition: border-color 0.15s, box-shadow 0.15s; outline: none;
+      background: rgba(255, 255, 255, 0.05); color: var(--ink);
+      transition: all 0.2s ease; outline: none;
     }
-    .push-channel-body input:focus, .push-channel-body select:focus, .push-channel-body textarea:focus { border-color: var(--ink); box-shadow: 0 0 0 1px var(--ink); }
+    .push-channel-body input:focus, .push-channel-body select:focus, .push-channel-body textarea:focus {
+      border-color: #8b5cf6;
+      box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.25);
+    }
     .push-channel-body select { cursor: pointer; }
     .push-channel-body textarea { resize: vertical; min-height: 60px; line-height: 1.5; }
-    .push-type-hint { font-size: 11px; color: var(--body); margin-top: 4px; padding: 8px 12px; background: var(--canvas-soft-2); border-radius: var(--radius-sm); font-family: 'SF Mono','Cascadia Code','JetBrains Mono','Consolas',monospace; line-height: 1.5; }
+    .push-type-hint { font-size: 11px; color: var(--body); margin-top: 6px; padding: 8px 12px; background: rgba(255, 255, 255, 0.02); border-radius: var(--radius-sm); font-family: 'SF Mono',monospace; line-height: 1.5; border: 1px solid var(--hairline); }
 
     /* Result Boxes */
-    .result-box { margin-top: 12px; padding: 10px 14px; border-radius: var(--radius-sm); display: none; font-size: 12px; line-height: 1.5; }
-    .result-success { background: #e8f5e9; color: #2e7d32; display: block; }
-    .result-error { background: #ffebee; color: #c62828; display: block; }
-    .result-loading { background: #fff3e0; color: #e65100; display: block; }
-    .result-info { background: #e3f2fd; color: #1565c0; display: block; }
+    .result-box {
+      margin-top: 12px; padding: 10px 14px; border-radius: var(--radius-sm);
+      display: none; font-size: 12px; line-height: 1.5;
+    }
+    .result-success {
+      background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.2);
+      color: #34d399; display: block;
+    }
+    .result-error {
+      background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.2);
+      color: #f87171; display: block;
+    }
+    .result-loading {
+      background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.2);
+      color: #fbbf24; display: block;
+    }
+    .result-info {
+      background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.2);
+      color: #60a5fa; display: block;
+    }
     .info-table { width: 100%; border-collapse: collapse; margin-top: 4px; font-size: 12px; }
-    .info-table td { padding: 5px 8px; border-bottom: 1px solid var(--hairline); }
-    .info-table td:first-child { font-weight: 500; color: var(--body); width: 40%; }
+    .info-table td { padding: 8px 12px; border-bottom: 1px solid var(--hairline); }
+    .info-table td:first-child { font-weight: 500; color: var(--mute); width: 40%; }
 
     /* Overview */
     .overview-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-    .overview-item { background: var(--canvas-soft); border-radius: var(--radius-sm); padding: 14px; }
-    .overview-item .label { font-size: 10px; color: var(--mute); text-transform: uppercase; letter-spacing: 0.4px; font-family: 'SF Mono','Cascadia Code','JetBrains Mono','Consolas',monospace; margin-bottom: 4px; }
+    .overview-item {
+      background: rgba(255, 255, 255, 0.01);
+      border: 1px solid var(--hairline);
+      border-radius: var(--radius-sm);
+      padding: 14px;
+    }
+    .overview-item .label { font-size: 10px; color: var(--mute); text-transform: uppercase; letter-spacing: 0.4px; font-family: 'SF Mono',monospace; margin-bottom: 4px; }
     .overview-item .value { font-size: 14px; font-weight: 600; color: var(--ink); }
 
     /* Tools */
@@ -158,13 +264,14 @@ const char* htmlPage = R"rawliteral(
     .btn-row .btn { flex: 1; min-width: 90px; }
     .btn-row + .btn-row { margin-top: 8px; }
     #atLog {
-      background: var(--ink); color: #50e3c2; font-family: 'SF Mono','Cascadia Code','JetBrains Mono','Consolas',monospace;
+      background: #05080f; color: #50e3c2; font-family: 'SF Mono',monospace;
       min-height: 130px; max-height: 260px; overflow-y: auto; padding: 12px 14px;
       border-radius: var(--radius-sm); margin-bottom: 10px; font-size: 12px;
       white-space: pre-wrap; word-break: break-all; line-height: 1.5;
+      border: 1px solid var(--hairline);
     }
     .at-bar { display: flex; gap: 6px; }
-    .at-bar input { flex: 1; font-family: 'SF Mono','Cascadia Code','JetBrains Mono','Consolas',monospace; }
+    .at-bar input { flex: 1; font-family: 'SF Mono',monospace; }
     .at-bar .btn { min-width: 60px; }
 
     /* Responsive */
@@ -195,6 +302,7 @@ const char* htmlPage = R"rawliteral(
     <nav class="sidebar-nav">
       <div class="sidebar-section-label">配置</div>
       <a data-panel="overview" class="active"><span class="ico">🏠</span> <span>系统概览</span></a>
+      <a data-panel="wifi"><span class="ico">📶</span> <span>WiFi 设置</span></a>
       <a data-panel="account"><span class="ico">🔐</span> <span>账号管理</span></a>
       <a data-panel="email"><span class="ico">📧</span> <span>邮件通知</span></a>
       <a data-panel="push"><span class="ico">🔗</span> <span>推送通道</span></a>
@@ -327,6 +435,29 @@ const char* htmlPage = R"rawliteral(
       </form>
     </div>
 
+    <!-- ===== WiFi Settings ===== -->
+    <div class="panel" id="panel-wifi">
+      <h1 class="page-title">WiFi 设置</h1>
+      <p class="page-subtitle">修改设备连接的 WiFi 账号和密码</p>
+      <form action="/save" method="POST" id="mainFormWifi">
+      <div class="card">
+        <div class="card-header">📶 WiFi 配置</div>
+        <div class="card-body">
+          <div class="form-group">
+            <label class="form-label">WiFi SSID (2.4G)</label>
+            <input class="form-input" type="text" name="wifiSsid" value="%WIFI_SSID_VAL%" placeholder="SSID" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">WiFi 密码</label>
+            <input class="form-input" type="password" name="wifiPass" value="%WIFI_PASS_VAL%" placeholder="密码">
+          </div>
+          <p class="form-hint">修改后点击保存，设备将自动写入存储并重启以尝试连接新 WiFi。</p>
+        </div>
+      </div>
+      <button type="submit" class="btn btn-primary btn-block btn-save">保存并应用</button>
+      </form>
+    </div>
+
     <!-- ===== Send SMS ===== -->
     <div class="panel" id="panel-sendsms">
       <h1 class="page-title">发送短信</h1>
@@ -426,11 +557,11 @@ const char* htmlPage = R"rawliteral(
     <!-- ===== System Log ===== -->
     <div class="panel" id="panel-log">
       <h1 class="page-title">系统日志</h1>
-      <p class="page-subtitle">实时查看设备串口日志输出 <span id="logStatus" style="color:#4CAF50;">● 自动刷新中</span></p>
+      <p class="page-subtitle">实时查看设备串口日志输出 <span id="logStatus" style="color:#34d399;">● 自动刷新中</span></p>
       <div class="card">
         <div class="card-header">📋 日志输出</div>
         <div class="card-body">
-          <div id="logView" style="background:#1e1e1e;color:#d4d4d4;padding:12px;border-radius:8px;font-family:'Cascadia Code','Fira Code',Consolas,monospace;font-size:12px;line-height:1.6;max-height:60vh;overflow-y:auto;white-space:pre-wrap;word-break:break-all;min-height:300px;">加载中...</div>
+          <div id="logView" style="background:#05080f;color:#d4d4d4;padding:12px;border-radius:8px;font-family:'SF Mono',monospace;font-size:12px;line-height:1.6;max-height:60vh;overflow-y:auto;white-space:pre-wrap;word-break:break-all;min-height:300px;border:1px solid var(--hairline);">加载中...</div>
           <div class="btn-row" style="margin-top:8px;">
             <button class="btn btn-secondary btn-sm" onclick="clearLogUI()">清空显示</button>
             <button class="btn btn-secondary btn-sm" onclick="refreshLog()">手动刷新</button>
@@ -618,6 +749,177 @@ const char* htmlPage = R"rawliteral(
     };
     document.addEventListener('DOMContentLoaded', function() { refreshLog(); startLogPoll(); });
   </script>
+</body>
+</html>
+)rawliteral";
+
+const char* wifiProvisionPage = R"rawliteral(
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SMS Forwarder | WiFi Provisioning</title>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #090d16;
+      --card-bg: rgba(255, 255, 255, 0.03);
+      --card-border: rgba(255, 255, 255, 0.08);
+      --accent: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+      --accent-solid: #8b5cf6;
+      --text: #f3f4f6;
+      --text-muted: #9ca3af;
+      --input-bg: rgba(255, 255, 255, 0.05);
+      --input-border: rgba(255, 255, 255, 0.1);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Outfit', -apple-system, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      overflow-x: hidden;
+      position: relative;
+    }
+    body::before, body::after {
+      content: '';
+      position: absolute;
+      width: 300px;
+      height: 300px;
+      border-radius: 50%;
+      background: var(--accent);
+      filter: blur(120px);
+      opacity: 0.15;
+      z-index: 0;
+    }
+    body::before { top: 10%; left: 10%; }
+    body::after { bottom: 10%; right: 10%; }
+    
+    .container {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-radius: 24px;
+      padding: 40px;
+      width: 100%;
+      max-width: 480px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+      z-index: 1;
+      position: relative;
+      animation: fadeIn 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+    .logo {
+      font-size: 32px;
+      font-weight: 700;
+      background: var(--accent);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 8px;
+      letter-spacing: -1px;
+    }
+    .subtitle {
+      font-size: 14px;
+      color: var(--text-muted);
+      line-height: 1.6;
+    }
+    .form-group {
+      margin-bottom: 20px;
+    }
+    .label {
+      display: block;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text);
+      margin-bottom: 8px;
+      letter-spacing: 0.5px;
+    }
+    .select, .input {
+      width: 100%;
+      padding: 12px 16px;
+      font-size: 14px;
+      font-family: inherit;
+      color: var(--text);
+      background: var(--input-bg);
+      border: 1px solid var(--input-border);
+      border-radius: 12px;
+      outline: none;
+      transition: all 0.3s ease;
+    }
+    .select:focus, .input:focus {
+      border-color: var(--accent-solid);
+      box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.25);
+    }
+    .select option {
+      background-color: var(--bg);
+      color: var(--text);
+    }
+    .btn {
+      width: 100%;
+      padding: 14px;
+      border: none;
+      border-radius: 12px;
+      background: var(--accent);
+      color: white;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3);
+    }
+    .btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
+    }
+    .btn:active {
+      transform: translateY(0);
+    }
+    .footer-text {
+      text-align: center;
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 24px;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="logo">SMS Forwarder</div>
+      <div class="subtitle">未检测到可用 WiFi 或连接失败，请配置并连接网络。</div>
+    </div>
+    <form action="/save_wifi" method="POST">
+      <div class="form-group">
+        <label class="label">WiFi 名称 (SSID)</label>
+        <select class="select" name="ssid" required>
+          <option value="" disabled selected>请选择 WiFi 网络...</option>
+          %WIFI_LIST%
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="label">WiFi 密码</label>
+        <input class="input" type="password" name="password" placeholder="请输入 WiFi 密码">
+      </div>
+      <button type="submit" class="btn">连接网络</button>
+    </form>
+    <div class="footer-text">
+      设备已进入配网状态。配置完成后，设备将自动尝试联网。如果三次失败，热点将重新开启供您配置。
+    </div>
+  </div>
 </body>
 </html>
 )rawliteral";

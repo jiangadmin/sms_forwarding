@@ -1,9 +1,12 @@
 #include "config.h"
 #include "web_handlers.h"
+#include "wifi_config.h"
 
 // 保存配置到NVS
 void saveConfig() {
   preferences.begin("sms_config", false);
+  preferences.putString("wifiSsid", config.wifiSsid);
+  preferences.putString("wifiPass", config.wifiPass);
   preferences.putString("smtpServer", config.smtpServer);
   preferences.putInt("smtpPort", config.smtpPort);
   preferences.putString("smtpUser", config.smtpUser);
@@ -33,6 +36,8 @@ void saveConfig() {
 // 从NVS加载配置
 void loadConfig() {
   preferences.begin("sms_config", true);
+  config.wifiSsid = preferences.getString("wifiSsid", WIFI_SSID);
+  config.wifiPass = preferences.getString("wifiPass", WIFI_PASS);
   config.smtpServer = preferences.getString("smtpServer", "");
   config.smtpPort = preferences.getInt("smtpPort", 465);
   config.smtpUser = preferences.getString("smtpUser", "");
@@ -113,5 +118,8 @@ bool isConfigValid() {
 
 // 获取当前设备URL
 String getDeviceUrl() {
+  if (WiFi.getMode() == WIFI_AP) {
+    return "http://" + WiFi.softAPIP().toString() + "/";
+  }
   return "http://" + WiFi.localIP().toString() + "/";
 }

@@ -261,23 +261,104 @@ void processAdminCommand(const char* sender, const char* text) {
   }
 }
 
+static String cachedOwnNumber = "";
+String getOwnNumber() {
+  if (cachedOwnNumber.length() > 0 && cachedOwnNumber != "\u672a\u65b6\u6216\u4e0d\u652f\u6301" && cachedOwnNumber != "\u672a\u77e5") {
+    return cachedOwnNumber;
+  }
+  String resp = sendATCommand("AT+CNUM", 2000);
+  if (resp.indexOf("+CNUM:") >= 0) {
+    int idx = resp.indexOf(",\"");
+    if (idx >= 0) {
+      int endIdx = resp.indexOf("\"", idx + 2);
+      if (endIdx > idx) {
+        String num = resp.substring(idx + 2, endIdx);
+        num.trim();
+        if (num.length() > 0) {
+          cachedOwnNumber = num;
+          return num;
+        }
+      }
+    }
+  }
+  cachedOwnNumber = "\u672a\u77e5"; // "未知"
+  return cachedOwnNumber;
+}
+
+String getSmsCode(const String& smsText) {
+  int len = smsText.length();
+  int count = 0;
+  int startIdx = -1;
+  for (int i = 0; i <= len; i++) {
+    char c = (i < len) ? smsText.charAt(i) : '\0';
+    if (c >= '0' && c <= '9') {
+      if (count == 0) {
+        startIdx = i;
+      }
+      count++;
+    } else {
+      if (count >= 4 && count <= 8) {
+        return smsText.substring(startIdx, startIdx + count);
+      }
+      count = 0;
+    }
+  }
+  return "";
+}
+
+String formatTimestamp(const String& rawTs) {
+  if (rawTs.length() >= 12) {
+    bool allDigits = true;
+    for (int i = 0; i < 12; i++) {
+      char c = rawTs.charAt(i);
+      if (c < '0' || c > '9') {
+        allDigits = false;
+        break;
+      }
+    }
+    if (allDigits) {
+      // Format: YYMMDDHHMMSS[TZ] -> YYYY-MM-DD HH:mm:ss
+      String yy = "20" + rawTs.substring(0, 2);
+      String mm = rawTs.substring(2, 4);
+      String dd = rawTs.substring(4, 6);
+      String hh = rawTs.substring(6, 8);
+      String min = rawTs.substring(8, 10);
+      String ss = rawTs.substring(10, 12);
+      return yy + "-" + mm + "-" + dd + " " + hh + ":" + min + ":" + ss;
+    }
+  }
+  
+  if (rawTs.length() >= 17 && rawTs.charAt(2) == '/' && rawTs.charAt(5) == '/') {
+    // yy/MM/dd,hh:mm:ss+zz -> YYYY-MM-DD HH:mm:ss
+    String yy = "20" + rawTs.substring(0, 2);
+    String mm = rawTs.substring(3, 5);
+    String dd = rawTs.substring(6, 8);
+    String hh = rawTs.substring(9, 11);
+    String min = rawTs.substring(12, 14);
+    String ss = rawTs.substring(15, 17);
+    return yy + "-" + mm + "-" + dd + " " + hh + ":" + min + ":" + ss;
+  }
+  
+  return rawTs;
+}
+
 // 处理最终的短信内容（管理员命令检查和转发）
 void processSmsContent(const char* sender, const char* text, const char* timestamp) {
-  logCaptureLn(String("=== 处理短信内容 ==="));
-  logCaptureLn(String("发送者: " + String(sender)));
-  logCaptureLn(String("时间戳: " + String(timestamp)));
-  logCaptureLn(String("内容: " + String(text)));
+  logCaptureLn(String("=== \u5904\u7406\u77ed\u4fe1\u5185\u5bb9 ==="));
+  logCaptureLn(String("\u53d1\u9001\u8005: " + String(sender)));
+  logCaptureLn(String("\u65f6\u95f4\u6233: " + String(timestamp)));
+  logCaptureLn(String("\u5185\u5bb9: " + String(text)));
   logCaptureLn(String("===================="));
 
   // 检查是否在号码黑名单中
   if (isInNumberBlackList(sender)) {
-    logCaptureLn(String("发送者在号码黑名单中，忽略该短信"));
+    logCaptureLn(String("\u53d1\u9001\u8005\u5728\u53f7\u7801\u9ed5\u540d\u5355\u4e2d\uff0c\u5ffd\u7565\u8be5\u77ed\u4fe1"));
     return;
   }
 
   // 检查是否为管理员命令
   if (isAdmin(sender)) {
-    logCaptureLn(String("收到管理员短信，检查命令..."));
+    logCaptureLn(String("\u6536\u5230\u7ba1\u7406\u5458\u77ed\u4fe1\uff0c\u68c0\u67e5\u547d\u4ee4..."));
     String smsText = String(text);
     smsText.trim();
     
@@ -291,9 +372,31 @@ void processSmsContent(const char* sender, const char* text, const char* timesta
 
   // 发送通知http（推送到所有启用的通道）
   sendSMSToServer(sender, text, timestamp);
+  
   // 发送通知邮件
-  String subject = ""; subject+="短信";subject+=sender;subject+=",";subject+=text;
-  String body = ""; body+="来自：";body+=sender;body+="，时间：";body+=timestamp;body+="，内容：";body+=text;
+  String smsText = String(text);
+  String senderStr = String(sender);
+  senderStr.trim();
+  
+  String code = getSmsCode(smsText);
+  String subject = "";
+  if (code.length() > 0) {
+    subject = String("\u9a8c\u8bc1\u7801\uff1a") + code; // "验证码：" + code
+  } else {
+    String suffix = "";
+    if (senderStr.length() >= 4) {
+      suffix = senderStr.substring(senderStr.length() - 4);
+    } else {
+      suffix = senderStr;
+    }
+    subject = suffix + String("\u7684\u77ed\u4fe1"); // "的短信"
+  }
+  
+  String body = smsText + "\n\n";
+  body += String("\u6765\u81ea\uff1a") + senderStr + "\n"; // "来自："
+  body += String("\u63a5\u6536\uff1a") + getOwnNumber() + "\n"; // "接收："
+  body += String("\u65f6\u95f4\uff1a") + formatTimestamp(String(timestamp)); // "时间："
+  
   sendEmailNotification(subject.c_str(), body.c_str());
 }
 

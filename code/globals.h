@@ -37,5 +37,9 @@ extern bool timeSynced;
 extern bool modemReady;
 extern unsigned long lastPrintTime;
 extern ConcatSms concatBuffer[MAX_CONCAT_MESSAGES];
+extern bool inApConfigMode;
+extern String scannedWifiListHtml;
+extern bool wifiConfigSubmitted;
+extern unsigned long wifiConfigSubmittedTime;
 
 #endif

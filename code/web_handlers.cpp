@@ -73,6 +73,11 @@ bool checkAuth() {
 
 // 处理配置页面请求
 void handleRoot() {
+  if (inApConfigMode) {
+    handleApConfigRoot();
+    return;
+  }
+  
   if (!checkAuth()) return;
   
   String html = String(htmlPage);
@@ -92,6 +97,8 @@ void handleRoot() {
   html.replace("%SMTP_SEND_TO%", config.smtpSendTo);
   html.replace("%ADMIN_PHONE%", config.adminPhone);
   html.replace("%NUMBER_BLACK_LIST%", config.numberBlackList);
+  html.replace("%WIFI_SSID_VAL%", config.wifiSsid);
+  html.replace("%WIFI_PASS_VAL%", config.wifiPass);
 
   // 概览页面的配置状态
   bool emailOk = config.smtpServer.length() > 0 && config.smtpUser.length() > 0 &&
@@ -848,38 +855,56 @@ void handlePing() {
 void handleSave() {
   if (!checkAuth()) return;
   
-  // 获取新的Web账号密码
-  String newWebUser = server.arg("webUser");
-  String newWebPass = server.arg("webPass");
-  
-  // 验证Web账号密码不能为空
-  if (newWebUser.length() == 0) newWebUser = DEFAULT_WEB_USER;
-  if (newWebPass.length() == 0) newWebPass = DEFAULT_WEB_PASS;
-  
-  config.webUser = newWebUser;
-  config.webPass = newWebPass;
-  config.smtpServer = server.arg("smtpServer");
-  config.smtpPort = server.arg("smtpPort").toInt();
-  if (config.smtpPort == 0) config.smtpPort = 465;
-  config.smtpUser = server.arg("smtpUser");
-  config.smtpPass = server.arg("smtpPass");
-  config.smtpSendTo = server.arg("smtpSendTo");
-  config.adminPhone = server.arg("adminPhone");
-  config.numberBlackList = server.arg("numberBlackList");
-  
-  // 保存推送通道配置
-  for (int i = 0; i < MAX_PUSH_CHANNELS; i++) {
-    String idx = String(i);
-    config.pushChannels[i].enabled = server.arg("push" + idx + "en") == "on";
-    config.pushChannels[i].type = (PushType)server.arg("push" + idx + "type").toInt();
-    config.pushChannels[i].url = server.arg("push" + idx + "url");
-    config.pushChannels[i].name = server.arg("push" + idx + "name");
-    config.pushChannels[i].key1 = server.arg("push" + idx + "key1");
-    config.pushChannels[i].key2 = server.arg("push" + idx + "key2");
-    config.pushChannels[i].customBody = server.arg("push" + idx + "body");
-    if (config.pushChannels[i].name.length() == 0) {
-      config.pushChannels[i].name = "通道" + String(i + 1);
+  bool wifiUpdated = false;
+
+  // 1. 登录凭据更新（如果包含该参数）
+  if (server.hasArg("webUser") || server.hasArg("webPass")) {
+    String newWebUser = server.arg("webUser");
+    String newWebPass = server.arg("webPass");
+    if (newWebUser.length() > 0) config.webUser = newWebUser;
+    if (newWebPass.length() > 0) config.webPass = newWebPass;
+  }
+
+  // 2. SMTP 邮件设置更新
+  if (server.hasArg("smtpServer")) {
+    config.smtpServer = server.arg("smtpServer");
+    config.smtpPort = server.arg("smtpPort").toInt();
+    if (config.smtpPort == 0) config.smtpPort = 465;
+    config.smtpUser = server.arg("smtpUser");
+    config.smtpPass = server.arg("smtpPass");
+    config.smtpSendTo = server.arg("smtpSendTo");
+  }
+
+  // 3. 推送通道设置更新
+  if (server.hasArg("push0type")) {
+    for (int i = 0; i < MAX_PUSH_CHANNELS; i++) {
+      String idx = String(i);
+      config.pushChannels[i].enabled = server.arg("push" + idx + "en") == "on";
+      config.pushChannels[i].type = (PushType)server.arg("push" + idx + "type").toInt();
+      config.pushChannels[i].url = server.arg("push" + idx + "url");
+      config.pushChannels[i].name = server.arg("push" + idx + "name");
+      config.pushChannels[i].key1 = server.arg("push" + idx + "key1");
+      config.pushChannels[i].key2 = server.arg("push" + idx + "key2");
+      config.pushChannels[i].customBody = server.arg("push" + idx + "body");
+      if (config.pushChannels[i].name.length() == 0) {
+        config.pushChannels[i].name = "通道" + String(i + 1);
+      }
     }
+  }
+
+  // 4. 管理员与黑名单设置更新
+  if (server.hasArg("adminPhone")) {
+    config.adminPhone = server.arg("adminPhone");
+  }
+  if (server.hasArg("numberBlackList")) {
+    config.numberBlackList = server.arg("numberBlackList");
+  }
+
+  // 5. WiFi 配置更新
+  if (server.hasArg("wifiSsid")) {
+    config.wifiSsid = server.arg("wifiSsid");
+    config.wifiPass = server.arg("wifiPass");
+    wifiUpdated = true;
   }
   
   saveConfig();
@@ -908,12 +933,18 @@ void handleSave() {
 )rawliteral";
   server.send(200, "text/html", html);
   
-  // 如果配置有效，发送启动通知
-  if (configValid) {
+  // 如果配置有效，且没有更改 WiFi（避免重启前重复发送通知），发送启动通知
+  if (configValid && !wifiUpdated) {
     logCaptureLn(String("配置有效，发送启动通知..."));
     String subject = "短信转发器配置已更新";
     String body = "设备配置已更新\n设备地址: " + getDeviceUrl();
     sendEmailNotification(subject.c_str(), body.c_str());
+  }
+
+  if (wifiUpdated) {
+    logCaptureLn(String("WiFi 配置已更新，设备即将在 2 秒后重启以连接新网络..."));
+    delay(2000);
+    ESP.restart();
   }
 }
 
@@ -1059,11 +1090,12 @@ void handleWifi() {
     server.send(200, "application/json", "{\"success\":true,\"message\":\"WiFi 正在重启，请等待约 5 秒后刷新页面\"}");
     WiFi.disconnect(true);
     delay(500);
+    WiFi.mode(WIFI_STA);
+    WiFi.setTxPower(WIFI_POWER_8_5dBm);
     WiFi.setSleep(false);
     WiFi.setAutoReconnect(true);
-    WiFi.setScanMethod(WIFI_FAST_SCAN);
-    WiFi.begin(WIFI_SSID, WIFI_PASS);
-    logCaptureLn(String("正在重新连接WiFi: " + String(WIFI_SSID)));
+    WiFi.begin(config.wifiSsid.c_str(), config.wifiPass.c_str());
+    logCaptureLn(String("正在重新连接WiFi: " + config.wifiSsid));
     unsigned long start = millis();
     while (WiFi.status() != WL_CONNECTED && millis() - start < 15000) {
       delay(50);
@@ -1075,7 +1107,86 @@ void handleWifi() {
       logCaptureLn(String("WiFi 重连失败，将在后台持续尝试"));
     }
   } else {
-    server.send(200, "application/json", "{\"success\":false,\"message\":\"未知操作\"}");
+    server.send(200, "application/json", "{\"success\":false,\"message\":\"\u672a\u77e5\u64cd\u4f5c\"}");
   }
   busy = false;
 }
+
+void handleApConfigRoot() {
+  String html = String(wifiProvisionPage);
+  html.replace("%WIFI_LIST%", scannedWifiListHtml);
+  server.send(200, "text/html", html);
+}
+
+void handleSaveWifi() {
+  if (!server.hasArg("ssid")) {
+    server.send(400, "text/plain", "Bad Request: Missing SSID");
+    return;
+  }
+  
+  String ssid = server.arg("ssid");
+  String pass = server.arg("password");
+  
+  config.wifiSsid = ssid;
+  config.wifiPass = pass;
+  saveConfig();
+  
+  String html = R"rawliteral(
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Connecting...</title>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Outfit', sans-serif;
+      background-color: #090d16;
+      color: #f3f4f6;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      margin: 0;
+    }
+    .card {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(20px);
+      border-radius: 20px;
+      padding: 40px;
+      text-align: center;
+      max-width: 400px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    }
+    .spinner {
+      border: 4px solid rgba(255,255,255,0.1);
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      border-left-color: #8b5cf6;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 20px;
+    }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    h2 { margin-bottom: 10px; font-weight: 600; }
+    p { color: #9ca3af; font-size: 14px; line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="spinner"></div>
+    <h2>正在连接 WiFi...</h2>
+    <p>配置已接收！设备现在正在尝试连接到您指定的 WiFi 网络。</p>
+    <p>如果连接成功，热点将会自动关闭；如果失败三次，热点将在不久后重新开启，您需要重新连接并配置。</p>
+  </div>
+</body>
+</html>
+)rawliteral";
+  server.send(200, "text/html", html);
+  
+  wifiConfigSubmitted = true;
+  wifiConfigSubmittedTime = millis();
+}
+

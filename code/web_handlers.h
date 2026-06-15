@@ -27,5 +27,7 @@ void handlePing();
 void handleLog();
 void handleModem();
 void handleWifi();
+void handleApConfigRoot();
+void handleSaveWifi();
 
 #endif

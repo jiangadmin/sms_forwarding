@@ -2,5 +2,6 @@
 #define WEB_HTML_H
 
 extern const char* htmlPage;
+extern const char* wifiProvisionPage;
 
 #endif
