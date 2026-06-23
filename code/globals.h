@@ -13,8 +13,8 @@
 #include "config_types.h"
 
 // 串口映射
-#define TXD 3
-#define RXD 4
+#define TXD 20
+#define RXD 21
 #define MODEM_EN_PIN 5
 
 // LED引脚定义（用于通过CI验证，给个假的）
@@ -41,5 +41,6 @@ extern bool inApConfigMode;
 extern String scannedWifiListHtml;
 extern bool wifiConfigSubmitted;
 extern unsigned long wifiConfigSubmittedTime;
+extern bool modemEnActiveLow;
 
 #endif

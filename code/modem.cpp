@@ -17,12 +17,12 @@ String sendATCommand(const char* cmd, unsigned long timeout) {
         unsigned long t = millis();
         while (millis() - t < 50) {
           if (Serial1.available()) resp += (char)Serial1.read();
-          server.handleClient();
+          yield();
         }
         return resp;
       }
     }
-    server.handleClient();
+    yield();
   }
   return resp;
 }
@@ -31,13 +31,13 @@ String sendATCommand(const char* cmd, unsigned long timeout) {
 void modemPowerCycle() {
   pinMode(MODEM_EN_PIN, OUTPUT);
 
-  logCaptureLn(String("EN 拉低：关闭模组"));
-  digitalWrite(MODEM_EN_PIN, LOW);
-  delay(1200);  // 关机时间给够
-
-  logCaptureLn(String("EN 拉高：开启模组"));
+  logCaptureLn(String("EN 拉高：关闭模组"));
   digitalWrite(MODEM_EN_PIN, HIGH);
-  delay(6000);  // 等模组完全启动再发AT（关键）
+  delay(1500);  // 关机时间给够
+
+  logCaptureLn(String("EN 拉低：开启模组"));
+  digitalWrite(MODEM_EN_PIN, LOW);
+  delay(8000);  // 等模组完全启动再发AT（从 6 秒增加到 8 秒以确保搜网和就绪）
 }
 
 // 重启模组（EN引脚断电重启 + 重新初始化）
@@ -49,29 +49,70 @@ void resetModule() {
 
 // 模组 AT 初始化流程（setup 中调用，resetModule 后也调用）
 void modemInit() {
+  logCaptureLn(String("开始初始化 4G 模组..."));
+  
+  // 按照 globals.h 定义的引脚初始化串口
+  Serial1.end();
+  delay(100);
+  Serial1.begin(115200, SERIAL_8N1, RXD, TXD);
+  Serial1.setRxBufferSize(SERIAL_BUFFER_SIZE);
+  
   // 清掉上电噪声/残留
   while (Serial1.available()) Serial1.read();
 
+  int atRetry = 0;
+  // 循环握手最多 15 次，给够模组开机启动的时间（每次最长等待 1000ms）
   while (!sendATandWaitOK("AT", 1000)) {
     logCaptureLn(String("AT未响应，重试..."));
     blink_short();
+    atRetry++;
+    if (atRetry >= 15) {
+      logCaptureLn(String("⚠️ 模组 AT 握手失败次数过多，跳过初始化以开启 Web 服务并检查接线"));
+      modemReady = false;
+      return;
+    }
   }
   logCaptureLn(String("模组AT响应正常"));
+
+  // 继续配置模组参数
+  logCaptureLn(String("开始配置模组参数..."));
+
+  int cgactRetry = 0;
   while (!sendATandWaitOK("AT+CGACT=0,1", 5000)) {
     logCaptureLn(String("设置CGACT失败，重试..."));
     blink_short();
+    cgactRetry++;
+    if (cgactRetry >= 5) {
+      logCaptureLn(String("⚠️ 设置CGACT失败次数过多，继续初始化..."));
+      break;
+    }
   }
   logCaptureLn(String("已禁用数据连接(AT+CGACT=0,1)，防止流量消耗"));
+
+  int cnmiRetry = 0;
   while (!sendATandWaitOK("AT+CNMI=2,2,0,0,0", 1000)) {
     logCaptureLn(String("设置CNMI失败，重试..."));
     blink_short();
+    cnmiRetry++;
+    if (cnmiRetry >= 5) {
+      logCaptureLn(String("⚠️ 设置CNMI失败次数过多，继续初始化..."));
+      break;
+    }
   }
   logCaptureLn(String("CNMI参数设置完成"));
+
+  int cmgfRetry = 0;
   while (!sendATandWaitOK("AT+CMGF=0", 1000)) {
     logCaptureLn(String("设置PDU模式失败，重试..."));
     blink_short();
+    cmgfRetry++;
+    if (cmgfRetry >= 5) {
+      logCaptureLn(String("⚠️ 设置PDU模式失败次数过多，继续初始化..."));
+      break;
+    }
   }
   logCaptureLn(String("PDU模式设置完成"));
+
   int ceregRetry = 0;
   while (!waitCEREG() && ceregRetry < 30) {
     logCaptureLn(String("等待网络注册..."));
@@ -106,7 +147,7 @@ bool sendATandWaitOK(const char* cmd, unsigned long timeout) {
       if (resp.indexOf("OK") >= 0) return true;
       if (resp.indexOf("ERROR") >= 0) return false;
     }
-    server.handleClient();
+    yield();
   }
   return false;
 }
@@ -127,7 +168,7 @@ bool waitCEREG() {
             resp.indexOf(",3") >= 0 || resp.indexOf(",4") >= 0) return false;
       }
     }
-    server.handleClient();
+    yield();
   }
   return false;
 }
@@ -170,7 +211,7 @@ bool sendSMS(const char* phoneNumber, const char* message) {
         break;
       }
     }
-    server.handleClient();
+    yield();
   }
   
   if (!gotPrompt) {
@@ -199,7 +240,7 @@ bool sendSMS(const char* phoneNumber, const char* message) {
         return false;
       }
     }
-    server.handleClient();
+    yield();
   }
   logCaptureLn(String("短信发送超时"));
   return false;

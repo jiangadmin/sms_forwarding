@@ -16,3 +16,4 @@ bool inApConfigMode = false;
 String scannedWifiListHtml = "";
 bool wifiConfigSubmitted = false;
 unsigned long wifiConfigSubmittedTime = 0;
+bool modemEnActiveLow = true;

@@ -147,7 +147,7 @@ void setup() {
   while (Serial1.available()) Serial1.read();
   
   pinMode(MODEM_EN_PIN, OUTPUT);
-  digitalWrite(MODEM_EN_PIN, LOW);
+  digitalWrite(MODEM_EN_PIN, HIGH);
   logCaptureLn(String("\u5df2\u5c06 4G \u6a21\u7ec4\u4e0b\u7535\uff0c\u51c6\u5907\u8fde\u63a5 WiFi..."));
   
   while (Serial1.available()) Serial1.read();
