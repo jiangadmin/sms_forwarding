@@ -118,9 +118,10 @@ bool attemptWifiConnection() {
         sendEmailNotification(subject.c_str(), body.c_str());
       }
       
-      logCaptureLn(String("WiFi \u548c NTP \u5df2\u5c31\u7eea\uff0c\u6b63\u5728\u5f00\u542f\u5e76\u521d\u59cb\u5316 4G \u6a21\u7ec4..."));
-      modemPowerCycle();
-      modemInit();
+      logCaptureLn(String("WiFi 和 NTP 已就绪，正在开启并初始化双 4G 模组..."));
+      modemPowerCycle(1);
+      modemPowerCycle(2);
+      modemInitAll();
       return true;
     } else {
       logCaptureLn(String("\u8fde\u63a5\u5931\u8d25!"));
@@ -142,15 +143,25 @@ void setup() {
   digitalWrite(LED_BUILTIN, HIGH);
   Serial.begin(115200);
   delay(200);
-  Serial1.begin(115200, SERIAL_8N1, RXD, TXD);
+  Serial1.begin(115200, SERIAL_8N1, RXD1, TXD1);
   Serial1.setRxBufferSize(SERIAL_BUFFER_SIZE);
+  Serial2.begin(115200, SERIAL_8N1, RXD2, TXD2);
+  Serial2.setRxBufferSize(SERIAL_BUFFER_SIZE);
   while (Serial1.available()) Serial1.read();
+  while (Serial2.available()) Serial2.read();
   
-  pinMode(MODEM_EN_PIN, OUTPUT);
-  digitalWrite(MODEM_EN_PIN, HIGH);
-  logCaptureLn(String("\u5df2\u5c06 4G \u6a21\u7ec4\u4e0b\u7535\uff0c\u51c6\u5907\u8fde\u63a5 WiFi..."));
+  if (MODEM1_EN_PIN >= 0) {
+    pinMode(MODEM1_EN_PIN, OUTPUT);
+    digitalWrite(MODEM1_EN_PIN, HIGH);
+  }
+  if (MODEM2_EN_PIN >= 0) {
+    pinMode(MODEM2_EN_PIN, OUTPUT);
+    digitalWrite(MODEM2_EN_PIN, HIGH);
+  }
+  logCaptureLn(String("准备连接 WiFi..."));
   
   while (Serial1.available()) Serial1.read();
+  while (Serial2.available()) Serial2.read();
   initConcatBuffer();
   loadConfig();
   configValid = isConfigValid();
@@ -158,32 +169,32 @@ void setup() {
   WiFi.onEvent([](WiFiEvent_t event, WiFiEventInfo_t info){
     if (event == ARDUINO_EVENT_WIFI_STA_DISCONNECTED) {
       uint8_t reason = info.wifi_sta_disconnected.reason;
-      logCapture(String("\u26a0 WiFi \u8fde\u63a5\u65ad\u5f00\uff0c\u539f\u56e0\u4ee3\u7801: ") + String(reason));
+      logCapture(String("⚠️ WiFi 连接断开，原因代码: ") + String(reason));
       switch (reason) {
-        case 1: logCaptureLn(" (\u672a\u6307\u5b9a\u9519\u8bef/WIFI_REASON_UNSPECIFIED)"); break;
-        case 2: logCaptureLn(" (\u6388\u6743\u8fc7\u671f/WIFI_REASON_AUTH_EXPIRE)"); break;
-        case 15: logCaptureLn(" (\u5bc6\u7801\u9519\u8bef\u6216\u4fe1\u53f7\u5dee/WIFI_REASON_4WAY_HANDSHAKE_TIMEOUT)"); break;
-        case 201: logCaptureLn(" (\u627e\u4e0d\u5230AP/WIFI_REASON_NO_AP_FOUND\uff0c\u8bf7\u786e\u8ba4\u662f2.4G\u7f51\u7edc\u4e14\u540d\u5b57\u65e0\u8bef)"); break;
-        case 202: logCaptureLn(" (\u6388\u6743\u5931\u8d25/WIFI_REASON_AUTH_FAIL)"); break;
-        case 203: logCaptureLn(" (\u5173\u8054\u5931\u8d25/WIFI_REASON_ASSOC_FAIL)"); break;
+        case 1: logCaptureLn(" (未指定错误/WIFI_REASON_UNSPECIFIED)"); break;
+        case 2: logCaptureLn(" (授权过期/WIFI_REASON_AUTH_EXPIRE)"); break;
+        case 15: logCaptureLn(" (密码错误或信号差/WIFI_REASON_4WAY_HANDSHAKE_TIMEOUT)"); break;
+        case 201: logCaptureLn(" (找不到AP/WIFI_REASON_NO_AP_FOUND，请确认是2.4G网络且名字无误)"); break;
+        case 202: logCaptureLn(" (授权失败/WIFI_REASON_AUTH_FAIL)"); break;
+        case 203: logCaptureLn(" (关联失败/WIFI_REASON_ASSOC_FAIL)"); break;
         default: logCaptureLn(""); break;
       }
     } else if (event == ARDUINO_EVENT_WIFI_STA_CONNECTED) {
-      logCaptureLn(String("\u5df2\u8fde\u63a5\u5230 AP: ") + WiFi.SSID());
+      logCaptureLn(String("已连接到 AP: ") + WiFi.SSID());
     } else if (event == ARDUINO_EVENT_WIFI_STA_GOT_IP) {
-      logCaptureLn(String("\u5df2\u6210\u529f\u83b7\u53d6 IP \u5730\u5740"));
+      logCaptureLn(String("已成功获取 IP 地址"));
     } else if (event == ARDUINO_EVENT_WIFI_AP_START) {
-      logCaptureLn(String("\u2713 WiFi AP \u63a5\u53e3\u5df2\u6210\u529f\u5728\u7269\u7406\u5c42\u542f\u52a8"));
+      logCaptureLn(String("✓ WiFi AP 接口已成功在物理层启动"));
     } else if (event == ARDUINO_EVENT_WIFI_AP_STOP) {
-      logCaptureLn(String("\u26a0 WiFi AP \u63a5\u53e3\u5df2\u505c\u6b62"));
+      logCaptureLn(String("⚠️ WiFi AP 接口已停止"));
     }
   });
 
   if (config.wifiSsid.length() == 0) {
-    logCaptureLn(String("\u672a\u914d\u7f6e WiFi\uff0c\u8fdb\u5165\u914d\u7f61\u6a21\u5f0f..."));
+    logCaptureLn(String("未配置 WiFi，进入配网模式..."));
     enterApConfigMode();
   } else {
-    logCaptureLn(String("\u68c0\u6d4b\u5230\u5df2\u4fdd\u5b58\u7684 WiFi \u914d\u7f6e\uff0c\u5c1d\u8bd5\u8fde\u63a5..."));
+    logCaptureLn(String("检测到已保存的 WiFi 配置，尝试连接..."));
     WiFi.mode(WIFI_STA);
     WiFi.setTxPower(WIFI_POWER_8_5dBm);
     WiFi.setSleep(false);
@@ -192,7 +203,7 @@ void setup() {
     bool connected = false;
     int failedAttempts = 0;
     while (failedAttempts < 3) {
-      logCaptureLn(String("\u5c1d\u8bd5\u8fde\u63a5 WiFi (\u7b2c ") + String(failedAttempts + 1) + String(" \u6b21)..."));
+      logCaptureLn(String("尝试连接 WiFi (第 ") + String(failedAttempts + 1) + String(" 次)..."));
       WiFi.begin(config.wifiSsid.c_str(), config.wifiPass.c_str());
       unsigned long start = millis();
       while (WiFi.status() != WL_CONNECTED && millis() - start < 15000) {
@@ -206,8 +217,8 @@ void setup() {
     }
     
     if (connected) {
-      logCaptureLn(String("WiFi \u8fde\u63a5\u6210\u529f!"));
-      logCapture(String("IP \u5730\u5740: "));
+      logCaptureLn(String("WiFi 连接成功!"));
+      logCapture(String("IP 地址: "));
       logCaptureLn(WiFi.localIP().toString());
       inApConfigMode = false;
       
@@ -216,17 +227,18 @@ void setup() {
       digitalWrite(LED_BUILTIN, LOW);
       
       if (configValid) {
-        logCaptureLn(String("\u914d\u7f6e\u6709\u6548\uff0c\u53d1\u9001\u542f\u52a8\u901a\u77e5..."));
-        String subject = "\u77ed\u4fe1\u8f6c\u53d1\u5668\u5df2\u542f\u52a8";
-        String body = "\u8bbe\u5907\u5df2\u542f\u52a8\n\u8bbe\u5907\u5730\u5740: " + getDeviceUrl();
+        logCaptureLn(String("配置有效，发送启动通知..."));
+        String subject = "短信转发器已启动";
+        String body = "设备已启动\n设备地址: " + getDeviceUrl();
         sendEmailNotification(subject.c_str(), body.c_str());
       }
       
-      logCaptureLn(String("WiFi \u548c NTP \u5df2\u5c31\u7eea\uff0c\u6b63\u5728\u5f00\u542f\u5e76\u521d\u59cb\u5316 4G \u6a21\u7ec4..."));
-      modemPowerCycle();
-      modemInit();
+      logCaptureLn(String("WiFi 和 NTP 已就绪，正在开启并初始化双 4G 模组..."));
+      modemPowerCycle(1);
+      modemPowerCycle(2);
+      modemInitAll();
     } else {
-      logCaptureLn(String("\u26a0 \u65e0\u6cd5\u8fde\u63a5\u5230\u5df2\u4fdd\u5b58\u7684 WiFi\uff0c\u8fdb\u5165\u914d\u7f61\u6a21\u5f0f..."));
+      logCaptureLn(String("⚠️ 无法连接到已保存的 WiFi，进入配网模式..."));
       enterApConfigMode();
     }
   }
@@ -245,7 +257,7 @@ void setup() {
   server.on("/modem", handleModem);
   server.on("/wifi", handleWifi);
   server.begin();
-  logCaptureLn(String("HTTP\u670d\u52a1\u5668\u5df2\u542f\u52a8"));
+  logCaptureLn(String("HTTP服务器已启动"));
 }
 
 void loop() {
@@ -259,10 +271,14 @@ void loop() {
   if (!inApConfigMode && !configValid) {
     if (millis() - lastPrintTime >= 1000) {
       lastPrintTime = millis();
-      logCaptureLn(String("\u26a0 \u8bf7\u8bbf\u95ee " + getDeviceUrl() + " \u914d\u7f6e\u7cfb\u7edf\u53c2\u6570"));
+      logCaptureLn(String("⚠️ 请访问 " + getDeviceUrl() + " 配置系统参数"));
     }
   }
   checkConcatTimeout();
-  if (Serial.available()) Serial1.write(Serial.read());
+  if (Serial.available()) {
+    char c = Serial.read();
+    Serial1.write(c);
+  }
   checkSerial1URC();
+  checkSerial2URC();
 }

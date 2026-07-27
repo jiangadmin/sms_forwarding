@@ -343,22 +343,23 @@ String formatTimestamp(const String& rawTs) {
 }
 
 // 处理最终的短信内容（管理员命令检查和转发）
-void processSmsContent(const char* sender, const char* text, const char* timestamp) {
-  logCaptureLn(String("=== \u5904\u7406\u77ed\u4fe1\u5185\u5bb9 ==="));
-  logCaptureLn(String("\u53d1\u9001\u8005: " + String(sender)));
-  logCaptureLn(String("\u65f6\u95f4\u6233: " + String(timestamp)));
-  logCaptureLn(String("\u5185\u5bb9: " + String(text)));
+void processSmsContent(const char* sender, const char* text, const char* timestamp, uint8_t modemIndex) {
+  String cardTag = "[卡" + String(modemIndex) + "] ";
+  logCaptureLn(String("=== 处理短信内容 ") + cardTag + "===");
+  logCaptureLn(String("发送者: " + String(sender)));
+  logCaptureLn(String("时间戳: " + String(timestamp)));
+  logCaptureLn(String("内容: " + String(text)));
   logCaptureLn(String("===================="));
 
   // 检查是否在号码黑名单中
   if (isInNumberBlackList(sender)) {
-    logCaptureLn(String("\u53d1\u9001\u8005\u5728\u53f7\u7801\u9ed5\u540d\u5355\u4e2d\uff0c\u5ffd\u7565\u8be5\u77ed\u4fe1"));
+    logCaptureLn(String("发送者在号码黑名单中，忽略该短信"));
     return;
   }
 
   // 检查是否为管理员命令
   if (isAdmin(sender)) {
-    logCaptureLn(String("\u6536\u5230\u7ba1\u7406\u5458\u77ed\u4fe1\uff0c\u68c0\u67e5\u547d\u4ee4..."));
+    logCaptureLn(String("收到管理员短信，检查命令..."));
     String smsText = String(text);
     smsText.trim();
     
@@ -381,7 +382,7 @@ void processSmsContent(const char* sender, const char* text, const char* timesta
   String code = getSmsCode(smsText);
   String subject = "";
   if (code.length() > 0) {
-    subject = String("\u9a8c\u8bc1\u7801\uff1a") + code; // "验证码：" + code
+    subject = cardTag + String("验证码：") + code;
   } else {
     String suffix = "";
     if (senderStr.length() >= 4) {
@@ -389,32 +390,36 @@ void processSmsContent(const char* sender, const char* text, const char* timesta
     } else {
       suffix = senderStr;
     }
-    subject = suffix + String("\u7684\u77ed\u4fe1"); // "的短信"
+    subject = cardTag + suffix + String("的短信");
   }
   
   String body = smsText + "\n\n";
-  body += String("\u6765\u81ea\uff1a") + senderStr + "\n"; // "来自："
-  body += String("\u63a5\u6536\uff1a") + getOwnNumber() + "\n"; // "接收："
-  body += String("\u65f6\u95f4\uff1a") + formatTimestamp(String(timestamp)); // "时间："
+  body += String("来自：") + senderStr + "\n";
+  body += String("接收：[模组") + String(modemIndex) + " / 卡" + String(modemIndex) + "]\n";
+  body += String("时间：") + formatTimestamp(String(timestamp));
   
   sendEmailNotification(subject.c_str(), body.c_str());
 }
 
-// 处理URC和PDU
-void checkSerial1URC() {
-  static enum { IDLE,
-                WAIT_PDU } state = IDLE;
+// 处理特定模组的 URC 和 PDU
+void checkSerialURC(uint8_t modemIndex) {
+  enum UrcState { IDLE, WAIT_PDU };
+  static UrcState state1 = IDLE;
+  static UrcState state2 = IDLE;
 
-  String line = readSerialLine(Serial1);
+  UrcState& state = (modemIndex == 2) ? state2 : state1;
+  HardwareSerial& serial = (modemIndex == 2) ? Serial2 : Serial1;
+
+  String line = readSerialLine(serial);
   if (line.length() == 0) return;
 
   // 打印到调试串口
-  logCaptureLn(String("Debug> " + line));
+  logCaptureLn(String("Debug[模组") + String(modemIndex) + "]> " + line);
 
   if (state == IDLE) {
     // 检测到短信上报URC头
     if (line.startsWith("+CMT:")) {
-      logCaptureLn(String("检测到+CMT，等待PDU数据..."));
+      logCaptureLn(String("模组 ") + String(modemIndex) + " 检测到+CMT，等待PDU数据...");
       state = WAIT_PDU;
     }
   } else if (state == WAIT_PDU) {
@@ -425,15 +430,15 @@ void checkSerial1URC() {
     
     // 如果是十六进制字符串，认为是PDU数据
     if (isHexString(line)) {
-      logCaptureLn(String("收到PDU数据: " + line));
+      logCaptureLn(String("模组 ") + String(modemIndex) + " 收到PDU数据: " + line);
       logCaptureLn(String("PDU长度: " + String(line.length()) + " 字符"));
       
       // 解析PDU
       if (!pdu.decodePDU(line.c_str())) {
-        logCaptureLn(String("❌ PDU解析失败！"));
+        logCaptureLn(String("❌ 模组 ") + String(modemIndex) + " PDU解析失败！");
       } else {
-        logCaptureLn(String("✓ PDU解析成功"));
-        logCaptureLn(String("=== 短信内容 ==="));
+        logCaptureLn(String("✓ 模组 ") + String(modemIndex) + " PDU解析成功");
+        logCaptureLn(String("=== 模组 ") + String(modemIndex) + " 短信内容 ===");
         logCaptureLn(String("发送者: " + String(pdu.getSender())));
         logCaptureLn(String("时间戳: " + String(pdu.getTimeStamp())));
         logCaptureLn(String("内容: " + String(pdu.getText())));
@@ -444,18 +449,15 @@ void checkSerial1URC() {
         int partNumber = concatInfo[1];
         int totalParts = concatInfo[2];
         
-        logCaptureF("长短信信息: 参考号=%d, 当前=%d, 总计=%d\n", refNumber, partNumber, totalParts);
+        logCaptureF("模组 %d 长短信信息: 参考号=%d, 当前=%d, 总计=%d\n", modemIndex, refNumber, partNumber, totalParts);
         logCaptureLn(String("==============="));
 
         // 判断是否为长短信
         if (totalParts > 1 && partNumber > 0) {
-          // 这是长短信的一部分
-          logCaptureF("📧 收到长短信分段 %d/%d\n", partNumber, totalParts);
+          logCaptureF("📧 收到长短信分段 %d/%d (模组%d)\n", partNumber, totalParts, modemIndex);
           
-          // 查找或创建缓存槽位
           int slot = findOrCreateConcatSlot(refNumber, pdu.getSender(), totalParts);
           
-          // 存储该分段（partNumber从1开始，数组从0开始）
           int partIndex = partNumber - 1;
           if (partIndex >= 0 && partIndex < MAX_CONCAT_PARTS) {
             if (!concatBuffer[slot].parts[partIndex].valid) {
@@ -463,7 +465,6 @@ void checkSerial1URC() {
               concatBuffer[slot].parts[partIndex].text = String(pdu.getText());
               concatBuffer[slot].receivedParts++;
               
-              // 如果是第一个收到的分段，保存时间戳
               if (concatBuffer[slot].receivedParts == 1) {
                 concatBuffer[slot].timestamp = String(pdu.getTimeStamp());
               }
@@ -477,34 +478,37 @@ void checkSerial1URC() {
             }
           }
           
-          // 检查是否已收齐所有分段
           if (concatBuffer[slot].receivedParts >= totalParts) {
             logCaptureLn(String("✅ 长短信已收齐，开始合并转发"));
             
-            // 合并所有分段
             String fullText = assembleConcatSms(slot);
             
-            // 处理完整短信
             processSmsContent(concatBuffer[slot].sender.c_str(), 
                              fullText.c_str(), 
-                             concatBuffer[slot].timestamp.c_str());
+                             concatBuffer[slot].timestamp.c_str(),
+                             modemIndex);
             
-            // 清空槽位
             clearConcatSlot(slot);
           }
         } else {
           // 普通短信，直接处理
-          processSmsContent(pdu.getSender(), pdu.getText(), pdu.getTimeStamp());
+          processSmsContent(pdu.getSender(), pdu.getText(), pdu.getTimeStamp(), modemIndex);
         }
       }
       
-      // 返回IDLE状态
       state = IDLE;
     } 
-    // 如果是其他内容（OK、ERROR等），也返回IDLE
     else {
-      logCaptureLn(String("收到非PDU数据，返回IDLE状态"));
+      logCaptureLn(String("模组 ") + String(modemIndex) + " 收到非PDU数据，返回IDLE状态");
       state = IDLE;
     }
   }
+}
+
+void checkSerial1URC() {
+  checkSerialURC(1);
+}
+
+void checkSerial2URC() {
+  checkSerialURC(2);
 }

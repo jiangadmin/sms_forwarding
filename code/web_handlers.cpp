@@ -104,6 +104,8 @@ void handleRoot() {
   bool emailOk = config.smtpServer.length() > 0 && config.smtpUser.length() > 0 &&
                  config.smtpPass.length() > 0 && config.smtpSendTo.length() > 0;
   html.replace("%SMTP_CHECK%", emailOk ? "已配置" : "未配置");
+  html.replace("%MODEM1_CHECK%", modem1Ready ? "已就绪" : "未就绪");
+  html.replace("%MODEM2_CHECK%", modem2Ready ? "已就绪" : "未就绪");
   html.replace("%MODEM_CHECK%", modemReady ? "已就绪" : "未就绪");
   int pushCount = 0;
   for (int i = 0; i < MAX_PUSH_CHANNELS; i++) {
@@ -192,14 +194,14 @@ void handleFlightMode() {
   if (!checkAuth()) return;
   
   String action = server.arg("action");
+  uint8_t modemIdx = (server.arg("modem") == "2" || server.arg("modemIndex") == "2") ? 2 : 1;
   String json = "{";
   bool success = false;
   String message = "";
   
   if (action == "query") {
-    // 查询当前功能模式
-    logCaptureLn(String("网页端查询飞行模式: AT+CFUN?"));
-    String resp = sendATCommand("AT+CFUN?", 2000);
+    logCaptureLn(String("网页端查询飞行模式 (模组 ") + String(modemIdx) + "): AT+CFUN?");
+    String resp = sendATCommand("AT+CFUN?", 2000, modemIdx);
     logCaptureLn(String("CFUN查询响应: " + resp));
     
     if (resp.indexOf("+CFUN:") >= 0) {
@@ -224,62 +226,59 @@ void handleFlightMode() {
       }
       
       message = "<table class='info-table'>";
+      message += "<tr><td>控制目标</td><td>模组 " + String(modemIdx) + "</td></tr>";
       message += "<tr><td>当前状态</td><td>" + statusIcon + " " + modeStr + "</td></tr>";
       message += "<tr><td>CFUN值</td><td>" + String(mode) + "</td></tr>";
       message += "</table>";
     } else {
-      message = "查询失败";
+      message = "模组 " + String(modemIdx) + " 查询失败";
     }
   }
   else if (action == "toggle") {
-    // 先查询当前状态
-    String resp = sendATCommand("AT+CFUN?", 2000);
+    String resp = sendATCommand("AT+CFUN?", 2000, modemIdx);
     logCaptureLn(String("CFUN查询响应: " + resp));
     
     if (resp.indexOf("+CFUN:") >= 0) {
       int idx = resp.indexOf("+CFUN:");
       int currentMode = resp.substring(idx + 6).toInt();
       
-      // 切换模式：1(正常) <-> 4(飞行模式)
       int newMode = (currentMode == 1) ? 4 : 1;
       String cmd = "AT+CFUN=" + String(newMode);
       
-      logCaptureLn(String("切换飞行模式: " + cmd));
-      String setResp = sendATCommand(cmd.c_str(), 5000);
+      logCaptureLn(String("切换飞行模式 (模组 ") + String(modemIdx) + "): " + cmd);
+      String setResp = sendATCommand(cmd.c_str(), 5000, modemIdx);
       logCaptureLn(String("CFUN设置响应: " + setResp));
       
       if (setResp.indexOf("OK") >= 0) {
         success = true;
         if (newMode == 4) {
-          message = "已开启飞行模式 ✈️<br>模组射频已关闭，无法收发短信";
+          message = "模组 " + String(modemIdx) + " 已开启飞行模式 ✈️<br>模组射频已关闭，无法收发短信";
         } else {
-          message = "已关闭飞行模式 🟢<br>模组恢复正常工作";
+          message = "模组 " + String(modemIdx) + " 已关闭飞行模式 🟢<br>模组恢复正常工作";
         }
       } else {
-        message = "切换失败: " + setResp;
+        message = "模组 " + String(modemIdx) + " 切换失败: " + setResp;
       }
     } else {
-      message = "无法获取当前状态";
+      message = "无法获取模组 " + String(modemIdx) + " 当前状态";
     }
   }
   else if (action == "on") {
-    // 强制开启飞行模式
-    logCaptureLn(String("网页端强制开启飞行模式: AT+CFUN=4"));
-    String resp = sendATCommand("AT+CFUN=4", 5000);
+    logCaptureLn(String("网页端强制开启模组 ") + String(modemIdx) + " 飞行模式: AT+CFUN=4");
+    String resp = sendATCommand("AT+CFUN=4", 5000, modemIdx);
     if (resp.indexOf("OK") >= 0) {
       success = true;
-      message = "已开启飞行模式 ✈️";
+      message = "模组 " + String(modemIdx) + " 已开启飞行模式 ✈️";
     } else {
       message = "开启失败: " + resp;
     }
   }
   else if (action == "off") {
-    // 强制关闭飞行模式
-    logCaptureLn(String("网页端关闭飞行模式: AT+CFUN=1"));
-    String resp = sendATCommand("AT+CFUN=1", 5000);
+    logCaptureLn(String("网页端关闭模组 ") + String(modemIdx) + " 飞行模式: AT+CFUN=1");
+    String resp = sendATCommand("AT+CFUN=1", 5000, modemIdx);
     if (resp.indexOf("OK") >= 0) {
       success = true;
-      message = "已关闭飞行模式 🟢";
+      message = "模组 " + String(modemIdx) + " 已关闭飞行模式 🟢";
     } else {
       message = "关闭失败: " + resp;
     }
@@ -300,14 +299,15 @@ void handleATCommand() {
   if (!checkAuth()) return;
   
   String cmd = server.arg("cmd");
+  uint8_t modemIdx = (server.arg("modem") == "2" || server.arg("modemIndex") == "2") ? 2 : 1;
   bool success = false;
   String message = "";
   
   if (cmd.length() == 0) {
     message = "错误：指令不能为空";
   } else {
-    logCaptureLn(String("网页端发送AT指令: " + cmd));
-    String resp = sendATCommand(cmd.c_str(), 5000);
+    logCaptureLn(String("网页端发送AT指令 (模组 ") + String(modemIdx) + "): " + cmd);
+    String resp = sendATCommand(cmd.c_str(), 5000, modemIdx);
     logCaptureLn(String("模组响应: " + resp));
     
     if (resp.length() > 0) {
@@ -326,30 +326,17 @@ void handleATCommand() {
   server.send(200, "application/json", json);
 }
 
-// 处理模组信息查询请求
-void handleQuery() {
-  if (!checkAuth()) return;
-  
-  String type = server.arg("type");
-  String json = "{";
-  bool success = false;
-  String message = "";
-  
+// 辅助函数：根据模组编号生成诊断HTML信息
+static String getModemInfoHtml(const String& type, uint8_t modemIdx) {
+  String label = "模组 " + String(modemIdx) + " (卡" + String(modemIdx) + ")";
+  String html = "<div style='font-weight:bold;margin-bottom:6px;color:#60a5fa;'>📱 " + label + "</div>";
+
   if (type == "ati") {
-    // 固件信息查询
-    String resp = sendATCommand("ATI", 2000);
-    logCaptureLn(String("ATI响应: " + resp));
-    
+    String resp = sendATCommand("ATI", 2000, modemIdx);
+    logCaptureLn(String("模组 ") + String(modemIdx) + " ATI响应: " + resp);
     if (resp.indexOf("OK") >= 0) {
-      success = true;
-      // 解析ATI响应
-      String manufacturer = "未知";
-      String model = "未知";
-      String version = "未知";
-      
-      // 按行解析
-      int lineStart = 0;
-      int lineNum = 0;
+      String manufacturer = "未知", model = "未知", version = "未知";
+      int lineStart = 0, lineNum = 0;
       for (int i = 0; i < resp.length(); i++) {
         if (resp.charAt(i) == '\n' || i == resp.length() - 1) {
           String line = resp.substring(lineStart, i);
@@ -363,35 +350,27 @@ void handleQuery() {
           lineStart = i + 1;
         }
       }
-      
-      message = "<table class='info-table'>";
-      message += "<tr><td>制造商</td><td>" + manufacturer + "</td></tr>";
-      message += "<tr><td>模组型号</td><td>" + model + "</td></tr>";
-      message += "<tr><td>固件版本</td><td>" + version + "</td></tr>";
-      message += "</table>";
+      html += "<table class='info-table'>";
+      html += "<tr><td>制造商</td><td>" + manufacturer + "</td></tr>";
+      html += "<tr><td>模组型号</td><td>" + model + "</td></tr>";
+      html += "<tr><td>固件版本</td><td>" + version + "</td></tr>";
+      html += "</table>";
     } else {
-      message = "查询失败";
+      html += "<p style='color:#ef4444;'>模组 " + String(modemIdx) + " 查询失败或未就绪</p>";
     }
   }
   else if (type == "signal") {
-    // 信号质量查询
-    String resp = sendATCommand("AT+CESQ", 2000);
-    logCaptureLn(String("CESQ响应: " + resp));
-    
+    String resp = sendATCommand("AT+CESQ", 2000, modemIdx);
+    logCaptureLn(String("模组 ") + String(modemIdx) + " CESQ响应: " + resp);
     if (resp.indexOf("+CESQ:") >= 0) {
-      success = true;
-      // 解析 +CESQ: <rxlev>,<ber>,<rscp>,<ecno>,<rsrq>,<rsrp>
       int idx = resp.indexOf("+CESQ:");
       String params = resp.substring(idx + 6);
       int endIdx = params.indexOf('\r');
       if (endIdx < 0) endIdx = params.indexOf('\n');
       if (endIdx > 0) params = params.substring(0, endIdx);
       params.trim();
-      
-      // 分割参数
       String values[6];
-      int valIdx = 0;
-      int startPos = 0;
+      int valIdx = 0, startPos = 0;
       for (int i = 0; i <= params.length() && valIdx < 6; i++) {
         if (i == params.length() || params.charAt(i) == ',') {
           values[valIdx] = params.substring(startPos, i);
@@ -400,8 +379,6 @@ void handleQuery() {
           startPos = i + 1;
         }
       }
-      
-      // RSRP转换为dBm (0-97映射到-140到-44 dBm, 99表示未知)
       int rsrp = values[5].toInt();
       String rsrpStr;
       if (rsrp == 99 || rsrp == 255) {
@@ -415,8 +392,6 @@ void handleQuery() {
         else if (rsrpDbm >= -110) rsrpStr += " (信号较弱)";
         else rsrpStr += " (信号很差)";
       }
-      
-      // RSRQ转换 (0-34映射到-19.5到-3 dB)
       int rsrq = values[4].toInt();
       String rsrqStr;
       if (rsrq == 99 || rsrq == 255) {
@@ -425,23 +400,18 @@ void handleQuery() {
         float rsrqDb = -19.5 + rsrq * 0.5;
         rsrqStr = String(rsrqDb, 1) + " dB";
       }
-      
-      message = "<table class='info-table'>";
-      message += "<tr><td>信号强度 (RSRP)</td><td>" + rsrpStr + "</td></tr>";
-      message += "<tr><td>信号质量 (RSRQ)</td><td>" + rsrqStr + "</td></tr>";
-      message += "<tr><td>原始数据</td><td>" + params + "</td></tr>";
-      message += "</table>";
+      html += "<table class='info-table'>";
+      html += "<tr><td>信号强度 (RSRP)</td><td>" + rsrpStr + "</td></tr>";
+      html += "<tr><td>信号质量 (RSRQ)</td><td>" + rsrqStr + "</td></tr>";
+      html += "<tr><td>原始数据</td><td>" + params + "</td></tr>";
+      html += "</table>";
     } else {
-      message = "查询失败";
+      html += "<p style='color:#ef4444;'>模组 " + String(modemIdx) + " 信号查询失败</p>";
     }
   }
   else if (type == "siminfo") {
-    // SIM卡信息查询
-    success = true;
-    message = "<table class='info-table'>";
-    
-    // 查询IMSI
-    String resp = sendATCommand("AT+CIMI", 2000);
+    html += "<table class='info-table'>";
+    String resp = sendATCommand("AT+CIMI", 2000, modemIdx);
     String imsi = "未知";
     if (resp.indexOf("OK") >= 0) {
       int start = resp.indexOf('\n');
@@ -455,10 +425,8 @@ void handleQuery() {
         }
       }
     }
-    message += "<tr><td>IMSI</td><td>" + imsi + "</td></tr>";
-    
-    // 查询ICCID
-    resp = sendATCommand("AT+ICCID", 2000);
+    html += "<tr><td>IMSI</td><td>" + imsi + "</td></tr>";
+    resp = sendATCommand("AT+ICCID", 2000, modemIdx);
     String iccid = "未知";
     if (resp.indexOf("+ICCID:") >= 0) {
       int idx = resp.indexOf("+ICCID:");
@@ -468,31 +436,22 @@ void handleQuery() {
       if (endIdx > 0) iccid = tmp.substring(0, endIdx);
       iccid.trim();
     }
-    message += "<tr><td>ICCID</td><td>" + iccid + "</td></tr>";
-    
-    // 查询本机号码 (如果SIM卡支持)
-    resp = sendATCommand("AT+CNUM", 2000);
+    html += "<tr><td>ICCID</td><td>" + iccid + "</td></tr>";
+    resp = sendATCommand("AT+CNUM", 2000, modemIdx);
     String phoneNum = "未存储或不支持";
     if (resp.indexOf("+CNUM:") >= 0) {
       int idx = resp.indexOf(",\"");
       if (idx >= 0) {
         int endIdx = resp.indexOf("\"", idx + 2);
-        if (endIdx > idx) {
-          phoneNum = resp.substring(idx + 2, endIdx);
-        }
+        if (endIdx > idx) phoneNum = resp.substring(idx + 2, endIdx);
       }
     }
-    message += "<tr><td>本机号码</td><td>" + phoneNum + "</td></tr>";
-    
-    message += "</table>";
+    html += "<tr><td>本机号码</td><td>" + phoneNum + "</td></tr>";
+    html += "</table>";
   }
   else if (type == "network") {
-    // 网络状态查询
-    success = true;
-    message = "<table class='info-table'>";
-    
-    // 查询网络注册状态
-    String resp = sendATCommand("AT+CEREG?", 2000);
+    html += "<table class='info-table'>";
+    String resp = sendATCommand("AT+CEREG?", 2000, modemIdx);
     String regStatus = "未知";
     if (resp.indexOf("+CEREG:") >= 0) {
       int idx = resp.indexOf("+CEREG:");
@@ -512,39 +471,28 @@ void handleQuery() {
         }
       }
     }
-    message += "<tr><td>网络注册</td><td>" + regStatus + "</td></tr>";
-    
-    // 查询运营商
-    resp = sendATCommand("AT+COPS?", 2000);
+    html += "<tr><td>网络注册</td><td>" + regStatus + "</td></tr>";
+    resp = sendATCommand("AT+COPS?", 2000, modemIdx);
     String oper = "未知";
     if (resp.indexOf("+COPS:") >= 0) {
       int idx = resp.indexOf(",\"");
       if (idx >= 0) {
         int endIdx = resp.indexOf("\"", idx + 2);
-        if (endIdx > idx) {
-          oper = resp.substring(idx + 2, endIdx);
-        }
+        if (endIdx > idx) oper = resp.substring(idx + 2, endIdx);
       }
     }
-    message += "<tr><td>运营商</td><td>" + oper + "</td></tr>";
-    
-    // 查询PDP上下文激活状态
-    resp = sendATCommand("AT+CGACT?", 2000);
+    html += "<tr><td>运营商</td><td>" + oper + "</td></tr>";
+    resp = sendATCommand("AT+CGACT?", 2000, modemIdx);
     String pdpStatus = "未激活";
-    if (resp.indexOf("+CGACT: 1,1") >= 0) {
-      pdpStatus = "已激活";
-    } else if (resp.indexOf("+CGACT:") >= 0) {
-      pdpStatus = "未激活";
-    }
-    message += "<tr><td>数据连接</td><td>" + pdpStatus + "</td></tr>";
-    
-    // 查询APN
-    resp = sendATCommand("AT+CGDCONT?", 2000);
+    if (resp.indexOf("+CGACT: 1,1") >= 0) pdpStatus = "已激活";
+    else if (resp.indexOf("+CGACT:") >= 0) pdpStatus = "未激活";
+    html += "<tr><td>数据连接</td><td>" + pdpStatus + "</td></tr>";
+    resp = sendATCommand("AT+CGDCONT?", 2000, modemIdx);
     String apn = "未知";
     if (resp.indexOf("+CGDCONT:") >= 0) {
       int idx = resp.indexOf(",\"");
       if (idx >= 0) {
-        idx = resp.indexOf(",\"", idx + 2);  // 跳过PDP类型
+        idx = resp.indexOf(",\"", idx + 2);
         if (idx >= 0) {
           int endIdx = resp.indexOf("\"", idx + 2);
           if (endIdx > idx) {
@@ -554,25 +502,32 @@ void handleQuery() {
         }
       }
     }
-    message += "<tr><td>APN</td><td>" + apn + "</td></tr>";
-    
-    message += "</table>";
+    html += "<tr><td>APN</td><td>" + apn + "</td></tr>";
+    html += "</table>";
   }
-  else if (type == "wifi") {
+  return html;
+}
+
+// 处理模组信息查询请求
+void handleQuery() {
+  if (!checkAuth()) return;
+  
+  String type = server.arg("type");
+  String modemArg = server.arg("modem");
+  if (modemArg.length() == 0) modemArg = server.arg("modemIndex");
+  
+  String json = "{";
+  bool success = true;
+  String message = "";
+  
+  if (type == "wifi") {
     // WiFi状态查询
-    success = true;
     message = "<table class='info-table'>";
-    
-    // WiFi连接状态
     String wifiStatus = WiFi.isConnected() ? "已连接" : "未连接";
     message += "<tr><td>连接状态</td><td>" + wifiStatus + "</td></tr>";
-    
-    // SSID
     String ssid = WiFi.SSID();
     if (ssid.length() == 0) ssid = "未知";
     message += "<tr><td>当前SSID</td><td>" + ssid + "</td></tr>";
-    
-    // 信号强度 RSSI
     int rssi = WiFi.RSSI();
     String rssiStr = String(rssi) + " dBm";
     if (rssi >= -50) rssiStr += " (信号极好)";
@@ -582,36 +537,34 @@ void handleQuery() {
     else if (rssi >= -90) rssiStr += " (信号较弱)";
     else rssiStr += " (信号很差)";
     message += "<tr><td>信号强度 (RSSI)</td><td>" + rssiStr + "</td></tr>";
-    
-    // IP地址
     message += "<tr><td>IP地址</td><td>" + WiFi.localIP().toString() + "</td></tr>";
-    
-    // 网关
     message += "<tr><td>网关</td><td>" + WiFi.gatewayIP().toString() + "</td></tr>";
-    
-    // 子网掩码
     message += "<tr><td>子网掩码</td><td>" + WiFi.subnetMask().toString() + "</td></tr>";
-    
-    // DNS
     message += "<tr><td>DNS服务器</td><td>" + WiFi.dnsIP().toString() + "</td></tr>";
-    
-    // MAC地址
     message += "<tr><td>MAC地址</td><td>" + WiFi.macAddress() + "</td></tr>";
-    
-    // BSSID (路由器MAC)
     message += "<tr><td>路由器BSSID</td><td>" + WiFi.BSSIDstr() + "</td></tr>";
-    
-    // 信道
     message += "<tr><td>WiFi信道</td><td>" + String(WiFi.channel()) + "</td></tr>";
-    
     message += "</table>";
   }
+  else if (type == "ati" || type == "signal" || type == "siminfo" || type == "network") {
+    if (modemArg == "1") {
+      message = getModemInfoHtml(type, 1);
+    } else if (modemArg == "2") {
+      message = getModemInfoHtml(type, 2);
+    } else {
+      // 默认双模组同时查询对比
+      message = getModemInfoHtml(type, 1);
+      message += "<div style='height:14px;'></div>";
+      message += getModemInfoHtml(type, 2);
+    }
+  }
   else {
+    success = false;
     message = "未知的查询类型";
   }
   
   json += "\"success\":" + String(success ? "true" : "false") + ",";
-  json += "\"message\":\"" + message + "\"";
+  json += "\"message\":\"" + jsonEscape(message) + "\"";
   json += "}";
   
   server.send(200, "application/json", json);
@@ -623,6 +576,7 @@ void handleSendSms() {
   
   String phone = server.arg("phone");
   String content = server.arg("content");
+  uint8_t modemIdx = (server.arg("modem") == "2" || server.arg("modemIndex") == "2") ? 2 : 1;
   
   phone.trim();
   content.trim();
@@ -635,11 +589,11 @@ void handleSendSms() {
   } else if (content.length() == 0) {
     resultMsg = "错误：请输入短信内容";
   } else {
-    logCaptureLn(String("网页端发送短信请求"));
+    logCaptureLn(String("网页端发送短信请求 (模组 ") + String(modemIdx) + ")");
     logCaptureLn(String("目标号码: " + phone));
     logCaptureLn(String("短信内容: " + content));
     
-    success = sendSMS(phone.c_str(), content.c_str());
+    success = sendSMS(phone.c_str(), content.c_str(), modemIdx);
     resultMsg = success ? "短信发送成功！" : "短信发送失败，请检查模组状态";
   }
   
@@ -677,14 +631,17 @@ void handleSendSms() {
 void handlePing() {
   if (!checkAuth()) return;
   
-  logCaptureLn(String("网页端发起Ping请求"));
+  uint8_t modemIdx = (server.arg("modem") == "2" || server.arg("modemIndex") == "2") ? 2 : 1;
+  HardwareSerial& serial = getModemSerial(modemIdx);
+
+  logCaptureLn(String("网页端发起Ping请求 (模组 ") + String(modemIdx) + ")");
   
   // 清空串口缓冲区
-  while (Serial1.available()) Serial1.read();
+  while (serial.available()) serial.read();
   
   // 激活PDP上下文（数据连接）
-  logCaptureLn(String("激活数据连接(CGACT)..."));
-  String activateResp = sendATCommand("AT+CGACT=1,1", 10000);
+  logCaptureLn(String("激活模组 ") + String(modemIdx) + " 数据连接(CGACT)...");
+  String activateResp = sendATCommand("AT+CGACT=1,1", 10000, modemIdx);
   logCaptureLn(String("CGACT响应: " + activateResp));
   
   // 检查激活是否成功（OK或已激活的情况）
@@ -694,11 +651,11 @@ void handlePing() {
   }
   
   // 清空串口缓冲区
-  while (Serial1.available()) Serial1.read();
+  while (serial.available()) serial.read();
   delay(500);  // 等待网络稳定
   
   // 发送MPING命令，ping 8.8.8.8，超时30秒，ping 1次
-  Serial1.println("AT+MPING=\"8.8.8.8\",30,1");
+  serial.println("AT+MPING=\"8.8.8.8\",30,1");
   
   // 等待响应
   unsigned long start = millis();
@@ -710,8 +667,8 @@ void handlePing() {
   
   // 等待最多35秒（30秒超时 + 5秒余量）
   while (millis() - start < 35000) {
-    while (Serial1.available()) {
-      char c = Serial1.read();
+    while (serial.available()) {
+      char c = serial.read();
       resp += c;
       logCapture(String(c));  // 调试输出
       
@@ -828,7 +785,7 @@ void handlePing() {
   
   // 关闭数据连接以节省流量
   logCaptureLn(String("关闭PDP上下文(CGACT=0)..."));
-  String deactivateResp = sendATCommand("AT+CGACT=0,1", 5000);
+  String deactivateResp = sendATCommand("AT+CGACT=0,1", 5000, modemIdx);
   logCaptureLn(String("CGACT关闭响应: " + deactivateResp));
   
   // 构建JSON响应
@@ -968,8 +925,6 @@ void handleLog() {
 void handleModem() {
   if (!checkAuth()) return;
 
-  // 防止重入：modemInit() 内部会调 server.handleClient()，
-  // 若浏览器超时重试会导致嵌套调用，最终拖垮 WiFi
   static bool busy = false;
   if (busy) {
     server.send(429, "application/json", "{\"success\":false,\"message\":\"模组正忙，请稍后重试\"}");
@@ -978,32 +933,32 @@ void handleModem() {
   busy = true;
 
   String action = server.arg("action");
+  uint8_t modemIdx = (server.arg("modem") == "2" || server.arg("modemIndex") == "2") ? 2 : 1;
   String json = "{";
   bool success = false;
   String message = "";
 
   if (action == "restart") {
-    // AT 软重启 — 先响应浏览器再初始化，防止浏览器超时重试
-    logCaptureLn(String("网页端请求软重启模组..."));
-    server.send(200, "application/json", "{\"success\":true,\"message\":\"正在软重启模组，请等待约 15 秒后刷新页面\"}");
-    String resp = sendATCommand("AT+CFUN=1,1", 15000);
+    logCaptureLn(String("网页端请求软重启模组 ") + String(modemIdx) + "...");
+    server.send(200, "application/json", "{\"success\":true,\"message\":\"正在软重启模组 " + String(modemIdx) + "，请等待约 15 秒后刷新页面\"}");
+    String resp = sendATCommand("AT+CFUN=1,1", 15000, modemIdx);
     success = (resp.indexOf("OK") >= 0);
     message = success ? "模组软重启成功" : "软重启失败";
     logCaptureLn(String(message + ": " + resp));
-    if (success) modemInit();
+    if (success) modemInit(modemIdx);
     busy = false;
     return;
   }
   else if (action == "hardreset") {
-    // EN 引脚断电重启（内部已调用 modemInit()）
-    logCaptureLn(String("网页端请求硬重启模组..."));
-    server.send(200, "application/json", "{\"success\":true,\"message\":\"正在硬重启模组，请等待约 15 秒后刷新页面\"}");
-    resetModule();
+    logCaptureLn(String("网页端请求硬重启模组 ") + String(modemIdx) + "...");
+    server.send(200, "application/json", "{\"success\":true,\"message\":\"正在硬重启模组 " + String(modemIdx) + "，请等待约 15 秒后刷新页面\"}");
+    resetModule(modemIdx);
+    busy = false;
     return;
   }
   else if (action == "signal") {
-    logCaptureLn(String("网页端查询信号: AT+CSQ"));
-    String resp = sendATCommand("AT+CSQ", 3000);
+    logCaptureLn(String("网页端查询信号 (模组 ") + String(modemIdx) + "): AT+CSQ");
+    String resp = sendATCommand("AT+CSQ", 3000, modemIdx);
     int csqIdx = resp.indexOf("+CSQ:");
     if (csqIdx >= 0) {
       String csqLine = resp.substring(csqIdx);
@@ -1027,8 +982,8 @@ void handleModem() {
     if (!success) message = "无法获取信号: " + resp;
   }
   else if (action == "operator") {
-    logCaptureLn(String("网页端查询运营商: AT+COPS?"));
-    String resp = sendATCommand("AT+COPS?", 5000);
+    logCaptureLn(String("网页端查询运营商 (模组 ") + String(modemIdx) + "): AT+COPS?");
+    String resp = sendATCommand("AT+COPS?", 5000, modemIdx);
     int copsIdx = resp.indexOf("+COPS:");
     if (copsIdx >= 0) {
       String copsLine = resp.substring(copsIdx);
@@ -1047,8 +1002,8 @@ void handleModem() {
     if (!success) message = "无法获取运营商: " + resp;
   }
   else if (action == "imei") {
-    logCaptureLn(String("网页端查询IMEI: AT+GSN"));
-    String resp = sendATCommand("AT+GSN", 3000);
+    logCaptureLn(String("网页端查询IMEI (模组 ") + String(modemIdx) + "): AT+GSN");
+    String resp = sendATCommand("AT+GSN", 3000, modemIdx);
     resp.trim();
     int okIdx = resp.lastIndexOf("OK");
     if (okIdx > 0) resp = resp.substring(0, okIdx);

@@ -342,7 +342,8 @@ const char* htmlPage = R"rawliteral(
         <div class="card-header">⚙ 配置状态</div>
         <div class="card-body">
           <table class="info-table">
-            <tr><td>模组状态</td><td id="cfgModem">%MODEM_CHECK%</td></tr>
+            <tr><td>模组1状态 (TXD20/RXD21)</td><td id="cfgModem1">%MODEM1_CHECK%</td></tr>
+            <tr><td>模组2状态 (TXD1/RXD0)</td><td id="cfgModem2">%MODEM2_CHECK%</td></tr>
             <tr><td>邮件通知</td><td id="cfgEmail">%SMTP_CHECK%</td></tr>
             <tr><td>推送通道</td><td id="cfgPush">%PUSH_COUNT% 个已启用</td></tr>
             <tr><td>管理员号码</td><td>%ADMIN_PHONE%</td></tr>
@@ -461,11 +462,17 @@ const char* htmlPage = R"rawliteral(
     <!-- ===== Send SMS ===== -->
     <div class="panel" id="panel-sendsms">
       <h1 class="page-title">发送短信</h1>
-      <p class="page-subtitle">通过模组直接发送短信</p>
+      <p class="page-subtitle">通过指定模组直接发送短信</p>
       <div class="card">
         <div class="card-header">📤 新建短信</div>
         <div class="card-body">
           <form action="/sendsms" method="POST" target="_self">
+            <div class="form-group"><label class="form-label">发信模组</label>
+              <select name="modem" class="form-input" style="width:100%;">
+                <option value="1">模组 1 (卡1 / TXD 20 / RXD 21)</option>
+                <option value="2">模组 2 (卡2 / TXD 1 / RXD 0)</option>
+              </select>
+            </div>
             <div class="form-group"><label class="form-label">目标号码</label><input class="form-input" type="text" name="phone" placeholder="13800138000" required></div>
             <div class="form-group"><label class="form-label">短信内容</label><textarea class="form-textarea" name="content" placeholder="输入短信内容..." required oninput="updateCount(this)"></textarea><p class="form-hint">已输入 <span id="charCount">0</span> 字符</p></div>
             <button type="submit" class="btn btn-primary" style="padding:9px 18px;">发送短信</button>
@@ -477,10 +484,18 @@ const char* htmlPage = R"rawliteral(
     <!-- ===== Diagnostics ===== -->
     <div class="panel" id="panel-diagnose">
       <h1 class="page-title">模组诊断</h1>
-      <p class="page-subtitle">查询模组状态、SIM 卡与网络信息</p>
+      <p class="page-subtitle">查询双模组状态、SIM 卡与网络信息</p>
       <div class="card">
         <div class="card-header">📊 查询</div>
         <div class="card-body">
+          <div class="form-group" style="margin-bottom:12px;">
+            <label class="form-label">查询目标：</label>
+            <select id="diagModem" class="form-input" style="width:auto;display:inline-block;padding:4px 8px;">
+              <option value="all">双模组对比 (模组1 + 模组2)</option>
+              <option value="1">模组 1 (卡1 / TXD 20 / RXD 21)</option>
+              <option value="2">模组 2 (卡2 / TXD 0 / RXD 1)</option>
+            </select>
+          </div>
           <div class="btn-row"><button class="btn btn-secondary" onclick="queryInfo('ati')">固件信息</button><button class="btn btn-secondary" onclick="queryInfo('signal')">信号质量</button></div>
           <div class="btn-row"><button class="btn btn-secondary" onclick="queryInfo('siminfo')">SIM 卡信息</button><button class="btn btn-secondary" onclick="queryInfo('network')">网络状态</button><button class="btn btn-secondary" onclick="queryInfo('wifi')">WiFi 状态</button></div>
           <div class="result-box" id="queryResult"></div>
@@ -495,6 +510,13 @@ const char* htmlPage = R"rawliteral(
       <div class="card">
         <div class="card-header">🌐 Ping</div>
         <div class="card-body">
+          <div class="form-group" style="margin-bottom:10px;">
+            <label class="form-label">测试模组：</label>
+            <select id="pingModem" class="form-input" style="width:auto;display:inline-block;padding:4px 8px;">
+              <option value="1">模组 1 (卡1 / TXD 20 / RXD 21)</option>
+              <option value="2">模组 2 (卡2 / TXD 0 / RXD 1)</option>
+            </select>
+          </div>
           <button class="btn btn-secondary" id="pingBtn" onclick="confirmPing()">Ping 8.8.8.8</button>
           <p class="form-hint">通过模组执行 Ping，消耗极少流量</p>
           <div class="result-box" id="pingResult"></div>
@@ -513,7 +535,19 @@ const char* htmlPage = R"rawliteral(
     <!-- ===== Modem Control ===== -->
     <div class="panel" id="panel-modem">
       <h1 class="page-title">模组控制</h1>
-      <p class="page-subtitle">模组重启、飞行模式、信号查询等操作</p>
+      <p class="page-subtitle">双模组重启、飞行模式、信号查询等操作</p>
+      <div class="card">
+        <div class="card-header">🎯 操作目标</div>
+        <div class="card-body" style="padding-bottom:5px;">
+          <div class="form-group" style="margin-bottom:0;">
+            <label class="form-label">选择控制模组：</label>
+            <select id="ctrlModem" class="form-input" style="width:auto;display:inline-block;padding:4px 8px;">
+              <option value="1">模组 1 (卡1 / TXD 20 / RXD 21)</option>
+              <option value="2">模组 2 (卡2 / TXD 0 / RXD 1)</option>
+            </select>
+          </div>
+        </div>
+      </div>
       <div class="card">
         <div class="card-header">🔄 模组重启</div>
         <div class="card-body">
@@ -537,6 +571,7 @@ const char* htmlPage = R"rawliteral(
           <div class="result-box" id="flightResult"></div>
         </div>
       </div>
+      </div>
     </div>
 
     <!-- ===== AT Terminal ===== -->
@@ -546,6 +581,13 @@ const char* htmlPage = R"rawliteral(
       <div class="card">
         <div class="card-header">💻 终端</div>
         <div class="card-body">
+          <div class="form-group" style="margin-bottom:10px;">
+            <label class="form-label">目标模组：</label>
+            <select id="atModem" class="form-input" style="width:auto;display:inline-block;padding:4px 8px;">
+              <option value="1">模组 1 (TXD 20 / RXD 21)</option>
+              <option value="2">模组 2 (TXD 1 / RXD 0)</option>
+            </select>
+          </div>
           <div id="atLog">就绪 — 输入 AT 指令开始调试</div>
           <div class="at-bar"><input class="form-input" type="text" id="atCmd" placeholder="AT+CSQ"><button class="btn btn-primary btn-sm" onclick="sendAT()" id="atBtn">发送</button></div>
           <div class="btn-row" style="margin-top:8px;"><button class="btn btn-secondary btn-sm" onclick="clearATLog()">清空日志</button></div>
@@ -625,9 +667,11 @@ const char* htmlPage = R"rawliteral(
 
     // ---- Query ----
     function queryInfo(type) {
+      var mEl = document.getElementById('diagModem');
+      var modem = mEl ? mEl.value : 'all';
       var r = document.getElementById('queryResult');
       r.className = 'result-box result-loading'; r.textContent = '查询中...';
-      fetch('/query?type=' + type).then(function(rr){return rr.json()}).then(function(d){
+      fetch('/query?type=' + type + '&modem=' + modem).then(function(rr){return rr.json()}).then(function(d){
         if(d.success){r.className='result-box result-info';r.innerHTML=d.message;}
         else{r.className='result-box result-error';r.innerHTML='查询失败: '+d.message;}
       }).catch(function(e){r.className='result-box result-error';r.textContent='请求失败: '+e;});
@@ -636,10 +680,12 @@ const char* htmlPage = R"rawliteral(
     // ---- Ping ----
     function confirmPing(){if(confirm('确定要执行 Ping 吗？将消耗少量流量。'))doPing();}
     function doPing(){
+      var mEl = document.getElementById('pingModem');
+      var modem = mEl ? mEl.value : '1';
       var b=document.getElementById('pingBtn'),r=document.getElementById('pingResult');
       b.disabled=true;b.textContent='Pinging...';
-      r.className='result-box result-loading';r.textContent='正在 Ping 8.8.8.8（最长 30 秒）...';
-      fetch('/ping',{method:'POST'}).then(function(rr){return rr.json()}).then(function(d){
+      r.className='result-box result-loading';r.textContent='正在通过模组 ' + modem + ' Ping 8.8.8.8（最长 30 秒）...';
+      fetch('/ping?modem=' + modem,{method:'POST'}).then(function(rr){return rr.json()}).then(function(d){
         b.disabled=false;b.textContent='Ping 8.8.8.8';
         if(d.success){r.className='result-box result-success';r.innerHTML='Ping 成功 — '+d.message;}
         else{r.className='result-box result-error';r.innerHTML='Ping 失败 — '+d.message;}
@@ -659,18 +705,22 @@ const char* htmlPage = R"rawliteral(
 
     // ---- Flight Mode ----
     function queryFlightMode(){
+      var mEl = document.getElementById('ctrlModem');
+      var modem = mEl ? mEl.value : '1';
       var r=document.getElementById('flightResult');
       r.className='result-box result-loading';r.textContent='查询中...';
-      fetch('/flight?action=query').then(function(rr){return rr.json()}).then(function(d){
+      fetch('/flight?action=query&modem=' + modem).then(function(rr){return rr.json()}).then(function(d){
         if(d.success){r.className='result-box result-info';r.innerHTML=d.message;}
         else{r.className='result-box result-error';r.innerHTML='查询失败: '+d.message;}
       }).catch(function(e){r.className='result-box result-error';r.textContent='请求失败: '+e;});
     }
     function toggleFlightMode(){
       if(!confirm('确定要切换飞行模式吗？'))return;
+      var mEl = document.getElementById('ctrlModem');
+      var modem = mEl ? mEl.value : '1';
       var b=document.getElementById('flightBtn'),r=document.getElementById('flightResult');
       b.disabled=true;r.className='result-box result-loading';r.textContent='切换中...';
-      fetch('/flight?action=toggle').then(function(rr){return rr.json()}).then(function(d){
+      fetch('/flight?action=toggle&modem=' + modem).then(function(rr){return rr.json()}).then(function(d){
         b.disabled=false;
         if(d.success){r.className='result-box result-success';r.innerHTML=d.message;}
         else{r.className='result-box result-error';r.innerHTML='切换失败: '+d.message;}
@@ -679,6 +729,8 @@ const char* htmlPage = R"rawliteral(
 
     // ---- Modem Control ----
     function modemAction(action){
+      var mEl = document.getElementById('ctrlModem');
+      var modem = mEl ? mEl.value : '1';
       var names={'restart':'软重启','hardreset':'硬重启','signal':'信号查询','operator':'运营商查询','imei':'IMEI查询'};
       var name=names[action]||action;
       var resultEl=null;
@@ -687,13 +739,13 @@ const char* htmlPage = R"rawliteral(
       if(action==='hardreset'){
         if(!confirm('硬重启将断电重启模组，确定继续？'))return;
         resultEl.className='result-box result-loading';resultEl.textContent='硬重启中（约10秒）...';
-        fetch('/modem?action=hardreset').then(function(rr){return rr.json()}).then(function(d){
+        fetch('/modem?action=hardreset&modem=' + modem).then(function(rr){return rr.json()}).then(function(d){
           resultEl.className='result-box result-success';resultEl.textContent=d.message+' — 稍后请手动查询信号确认恢复';
         }).catch(function(e){resultEl.className='result-box result-error';resultEl.textContent='请求失败: '+e;});
         return;
       }
       resultEl.className='result-box result-loading';resultEl.textContent=name+'中...';
-      fetch('/modem?action='+action).then(function(rr){return rr.json()}).then(function(d){
+      fetch('/modem?action='+action+'&modem=' + modem).then(function(rr){return rr.json()}).then(function(d){
         if(d.success){resultEl.className='result-box result-success';resultEl.innerHTML=name+'成功: '+d.message;}
         else{resultEl.className='result-box result-error';resultEl.innerHTML=name+'失败: '+d.message;}
       }).catch(function(e){resultEl.className='result-box result-error';resultEl.textContent='请求失败: '+e;});
@@ -710,9 +762,10 @@ const char* htmlPage = R"rawliteral(
     }
     function sendAT(){
       var inp=document.getElementById('atCmd'),cmd=inp.value.trim();if(!cmd)return;
+      var mEl=document.getElementById('atModem'),mVal=mEl?mEl.value:'1';
       var btn=document.getElementById('atBtn');btn.disabled=true;btn.textContent='...';
-      addLog(cmd,'user');inp.value='';
-      fetch('/at?cmd='+encodeURIComponent(cmd)).then(function(rr){return rr.json()}).then(function(d){
+      addLog('[模组'+mVal+'] > '+cmd,'user');inp.value='';
+      fetch('/at?modem='+mVal+'&cmd='+encodeURIComponent(cmd)).then(function(rr){return rr.json()}).then(function(d){
         addLog(d.message,d.success?'resp':'error');
       }).catch(function(e){addLog('网络错误: '+e,'error')}).finally(function(){btn.disabled=false;btn.textContent='发送';});
     }

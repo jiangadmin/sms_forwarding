@@ -13,7 +13,9 @@ bool isHexString(const String& str);
 bool isInNumberBlackList(const char* sender);
 bool isAdmin(const char* sender);
 void processAdminCommand(const char* sender, const char* text);
-void processSmsContent(const char* sender, const char* text, const char* timestamp);
+void processSmsContent(const char* sender, const char* text, const char* timestamp, uint8_t modemIndex = 1);
+void checkSerialURC(uint8_t modemIndex = 1);
 void checkSerial1URC();
+void checkSerial2URC();
 
 #endif

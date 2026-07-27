@@ -165,13 +165,16 @@ sendEmailNotification()   发送 "配置已更新" 邮件
 - 串口行缓冲：500 字节（`SERIAL_BUFFER_SIZE`）
 - HTTP 响应在函数内栈分配，调用结束自动释放
 
-## 关键硬件引脚
+## 关键硬件引脚 (双 ML307R 模组支持)
 
 | 定义 | GPIO | 功能 |
 |---|---|---|
-| `TXD` | 3 | 模组 UART TX |
-| `RXD` | 4 | 模组 UART RX |
-| `MODEM_EN_PIN` | 5 | 模组 EN 使能（LOW=关机, HIGH=开机） |
+| `TXD1` | 20 | 模组1 (Modem 1) UART TX |
+| `RXD1` | 21 | 模组1 (Modem 1) UART RX |
+| `MODEM1_EN_PIN` | -1 | 未连接/不使用 EN 引脚 |
+| `TXD2` | 0 | 模组2 (Modem 2) UART TX |
+| `RXD2` | 1 | 模组2 (Modem 2) UART RX |
+| `MODEM2_EN_PIN` | -1 | 未连接/不使用 EN 引脚 |
 | `LED_BUILTIN` | 8 | 板载 LED（LOW=亮） |
 
 ## 错误处理策略

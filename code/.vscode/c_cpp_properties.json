@@ -1,0 +1,46 @@
+{
+    "configurations": [
+        {
+            "name": "esp32:esp32:nologo_esp32c3_super_mini",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "D:\\Project\\SmsForwarding\\code\\.vscode\\code",
+                "C:\\Users\\jiang\\AppData\\Local\\Arduino15\\packages\\esp32\\tools\\esp32c3-libs\\3.3.11/qio_qspi/include",
+                "C:\\Users\\jiang\\AppData\\Local\\Arduino15\\packages\\esp32\\hardware\\esp32\\3.3.11\\cores\\esp32",
+                "C:\\Users\\jiang\\AppData\\Local\\Arduino15\\packages\\esp32\\hardware\\esp32\\3.3.11\\variants\\nologo_esp32c3_super_mini",
+                "C:\\Users\\jiang\\AppData\\Local\\Arduino15\\packages\\esp32\\hardware\\esp32\\3.3.11\\libraries\\WiFi\\src",
+                "C:\\Users\\jiang\\AppData\\Local\\Arduino15\\packages\\esp32\\hardware\\esp32\\3.3.11\\libraries\\Network\\src",
+                "C:\\Users\\jiang\\AppData\\Local\\Arduino15\\packages\\esp32\\hardware\\esp32\\3.3.11\\libraries\\NetworkClientSecure\\src",
+                "C:\\Users\\jiang\\AppData\\Local\\Arduino15\\packages\\esp32\\hardware\\esp32\\3.3.11\\libraries\\WebServer\\src",
+                "C:\\Users\\jiang\\AppData\\Local\\Arduino15\\packages\\esp32\\hardware\\esp32\\3.3.11\\libraries\\FS\\src",
+                "C:\\Users\\jiang\\AppData\\Local\\Arduino15\\packages\\esp32\\hardware\\esp32\\3.3.11\\libraries\\Preferences\\src",
+                "c:\\Users\\jiang\\Documents\\Arduino\\libraries\\pdulib\\src",
+                "c:\\Users\\jiang\\Documents\\Arduino\\libraries\\ReadyMail\\src",
+                "C:\\Users\\jiang\\AppData\\Local\\Arduino15\\packages\\esp32\\tools\\esp-rv32\\2601\\riscv32-esp-elf\\include"
+            ],
+            "forcedInclude": [
+                "C:\\Users\\jiang\\AppData\\Local\\Arduino15\\packages\\esp32\\hardware\\esp32\\3.3.11\\cores\\esp32\\Arduino.h"
+            ],
+            "defines": [
+                "F_CPU=160000000L",
+                "ARDUINO=10607",
+                "ARDUINO_NOLOGO_ESP32C3_SUPER_MINI",
+                "ARDUINO_ARCH_ESP32",
+                "ARDUINO_BOARD=\"NOLOGO_ESP32C3_SUPER_MINI\"",
+                "ARDUINO_VARIANT=\"nologo_esp32c3_super_mini\"",
+                "ARDUINO_PARTITION_default",
+                "ARDUINO_HOST_OS=\"windows\"",
+                "ARDUINO_FQBN=\"esp32:esp32:nologo_esp32c3_super_mini\"",
+                "ESP32=ESP32",
+                "CORE_DEBUG_LEVEL=0",
+                "ARDUINO_USB_MODE=1",
+                "ARDUINO_USB_CDC_ON_BOOT=1"
+            ],
+            "compilerPath": "C:\\Users\\jiang\\AppData\\Local\\Arduino15\\packages\\esp32\\tools\\esp-rv32\\2601/bin/riscv32-esp-elf-g++",
+            "cStandard": "c11",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "gcc-x64"
+        }
+    ],
+    "version": 4
+}
