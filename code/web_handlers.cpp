@@ -1043,10 +1043,10 @@ void handleWifi() {
   if (action == "restart") {
     logCaptureLn(String("网页端请求重启WiFi..."));
     server.send(200, "application/json", "{\"success\":true,\"message\":\"WiFi 正在重启，请等待约 5 秒后刷新页面\"}");
-    WiFi.disconnect(true);
-    delay(500);
+    WiFi.mode(WIFI_OFF);
+    delay(200);
     WiFi.mode(WIFI_STA);
-    WiFi.setTxPower(WIFI_POWER_8_5dBm);
+    WiFi.setTxPower(WIFI_POWER_15dBm);
     WiFi.setSleep(false);
     WiFi.setAutoReconnect(true);
     WiFi.begin(config.wifiSsid.c_str(), config.wifiPass.c_str());

@@ -31,36 +31,48 @@ void syncNtpTime() {
 }
 
 void enterApConfigMode() {
-  logCaptureLn(String("\u6b63\u5728\u626b\u63cf\u9644\u8fd1 WiFi..."));
+  logCaptureLn(String("正在扫描附近 WiFi..."));
+  WiFi.mode(WIFI_OFF);
+  delay(200);
   WiFi.mode(WIFI_STA);
   WiFi.disconnect();
-  delay(100);
+  WiFi.setTxPower(WIFI_POWER_15dBm);
+  delay(200);
   
   // Read MAC address while in STA mode to avoid getting 00:00:00:00:00:00
   String mac = WiFi.macAddress();
   
   int n = WiFi.scanNetworks();
-  logCaptureLn(String("\u626b\u63cf\u5b8c\u6210\uff0c\u53d1\u73b0 ") + String(n) + String(" \u4e2a\u7f51\u7edc"));
+  if (n < 0) {
+    logCaptureLn(String("⚠️ Wi-Fi 扫描失败，重试中..."));
+    WiFi.mode(WIFI_OFF);
+    delay(200);
+    WiFi.mode(WIFI_STA);
+    delay(200);
+    n = WiFi.scanNetworks();
+  }
+  logCaptureLn(String("扫描完成，发现 ") + String(n) + String(" 个网络"));
   
   scannedWifiListHtml = "";
   for (int i = 0; i < n; ++i) {
     String ssid = WiFi.SSID(i);
     int32_t rssi = WiFi.RSSI(i);
-    String encryption = (WiFi.encryptionType(i) == WIFI_AUTH_OPEN) ? String("\u516c\u5f00") : String("\u52a0\u5bc6");
-    scannedWifiListHtml += "<option value=\"" + ssid + "\">" + ssid + " (" + String("\u4fe1\u53f7: ") + String(rssi) + "dBm, " + encryption + ")</option>";
+    String encryption = (WiFi.encryptionType(i) == WIFI_AUTH_OPEN) ? String("公开") : String("加密");
+    scannedWifiListHtml += "<option value=\"" + ssid + "\">" + ssid + " (信号: " + String(rssi) + "dBm, " + encryption + ")</option>";
   }
   if (n <= 0) {
-    scannedWifiListHtml = "<option value=\"\" disabled>" + String("\u672a\u626b\u63cf\u5230\u9644\u8fd1\u7684 WiFi \u7f51\u7edc") + "</option>";
+    scannedWifiListHtml = "<option value=\"\" disabled>未扫描到附近的 WiFi 网络</option>";
   }
   
-  // Clean up scan results from memory
   WiFi.scanDelete();
   
-  // Explicitly set to WIFI_AP mode
+  // Clean reset Wi-Fi before SoftAP startup
+  WiFi.mode(WIFI_OFF);
+  delay(300);
   WiFi.mode(WIFI_AP);
-  delay(500);
+  delay(200);
+  WiFi.setTxPower(WIFI_POWER_15dBm);
   
-  // Set explicit IP for SoftAP
   IPAddress apIP(192, 168, 4, 1);
   WiFi.softAPConfig(apIP, apIP, IPAddress(255, 255, 255, 0));
   delay(100);
@@ -69,30 +81,31 @@ void enterApConfigMode() {
   macSuffix.replace(":", "");
   String apSsid = "SMS_Forwarder_" + macSuffix;
   
-  // Start SoftAP using default parameters (channel 1, visible, max 4 clients) with WPA2 password
   bool apSuccess = WiFi.softAP(apSsid.c_str(), "12345678");
   
-  // Lower TX power AFTER starting the AP to ensure it takes effect and prevents brownout
-  WiFi.setTxPower(WIFI_POWER_8_5dBm);
-  
   if (apSuccess) {
-    logCaptureLn(String("\u5df2\u542f\u52a8\u70ed\u70b9: ") + apSsid);
-    logCaptureLn(String("\u70ed\u70b9\u5bc6\u7801: 12345678"));
-    logCaptureLn(String("\u8bf7\u8fde\u63a5\u8be5\u70ed\u70b9\u5e76\u8bbf\u95ee http://") + WiFi.softAPIP().toString() + String(" \u914d\u7f6e WiFi"));
+    logCaptureLn(String("已启动热点: ") + apSsid);
+    logCaptureLn(String("热点密码: 12345678"));
+    logCaptureLn(String("请连接该热点并访问 http://") + WiFi.softAPIP().toString() + String(" 配置 WiFi"));
   } else {
-    logCaptureLn(String("\u26a0 \u542f\u52a8\u70ed\u70b9\u5931\u8d25!"));
+    logCaptureLn(String("⚠️ 启动热点失败!"));
   }
   inApConfigMode = true;
 }
 
 bool attemptWifiConnection() {
-  logCaptureLn(String("\u6b63\u5728\u5c1d\u8bd5\u8fde\u63a5\u5230 WiFi: ") + config.wifiSsid);
+  logCaptureLn(String("正在尝试连接到 WiFi: ") + config.wifiSsid);
   WiFi.softAPdisconnect(true);
   
   int failedAttempts = 0;
   while (failedAttempts < 3) {
-    logCaptureLn(String("\u5c1d\u8bd5\u8fde\u63a5 WiFi (\u7b2c ") + String(failedAttempts + 1) + String(" \u6b21)..."));
+    logCaptureLn(String("尝试连接 WiFi (第 ") + String(failedAttempts + 1) + String(" 次)..."));
+    WiFi.mode(WIFI_OFF);
+    delay(200);
     WiFi.mode(WIFI_STA);
+    WiFi.setTxPower(WIFI_POWER_15dBm);
+    WiFi.setSleep(false);
+    WiFi.setAutoReconnect(true);
     WiFi.begin(config.wifiSsid.c_str(), config.wifiPass.c_str());
     
     unsigned long start = millis();
@@ -101,8 +114,8 @@ bool attemptWifiConnection() {
     }
     
     if (WiFi.status() == WL_CONNECTED) {
-      logCaptureLn(String("WiFi \u8fde\u63a5\u6210\u529f!"));
-      logCapture(String("IP \u5730\u5740: "));
+      logCaptureLn(String("WiFi 连接成功!"));
+      logCapture(String("IP 地址: "));
       logCaptureLn(WiFi.localIP().toString());
       inApConfigMode = false;
       configValid = isConfigValid();
@@ -112,9 +125,9 @@ bool attemptWifiConnection() {
       digitalWrite(LED_BUILTIN, LOW);
       
       if (configValid) {
-        logCaptureLn(String("\u914d\u7f6e\u6709\u6548\uff0c\u53d1\u9001\u542f\u52a8\u901a\u77e5..."));
-        String subject = "\u77ed\u4fe1\u8f6c\u53d1\u5668\u5df2\u542f\u52a8";
-        String body = "\u8bbe\u5907\u5df2\u542f\u52a8\n\u8bbe\u5907\u5730\u5740: " + getDeviceUrl();
+        logCaptureLn(String("配置有效，发送启动通知..."));
+        String subject = "短信转发器已启动";
+        String body = "设备已启动\n设备地址: " + getDeviceUrl();
         sendEmailNotification(subject.c_str(), body.c_str());
       }
       
@@ -124,16 +137,12 @@ bool attemptWifiConnection() {
       modemInitAll();
       return true;
     } else {
-      logCaptureLn(String("\u8fde\u63a5\u5931\u8d25!"));
+      logCaptureLn(String("连接失败!"));
       failedAttempts++;
     }
   }
   
-  logCaptureLn(String("\u26a0 \u8fde\u7eed 3 \u6b21\u8fde\u63a5 WiFi \u5931\u8d25\u3002\u5c06\u653e\u5f03\u672c\u6b21\u914d\u7f6e\uff0c\u91cd\u65b0\u542f\u52a8\u70ed\u70b9\u7b49\u5f85\u914d\u7f61..."));
-  config.wifiSsid = "";
-  config.wifiPass = "";
-  saveConfig();
-  
+  logCaptureLn(String("⚠️ 连续 3 次连接 WiFi 失败，重新启动热点等待配置..."));
   enterApConfigMode();
   return false;
 }
@@ -172,7 +181,7 @@ void setup() {
       logCapture(String("⚠️ WiFi 连接断开，原因代码: ") + String(reason));
       switch (reason) {
         case 1: logCaptureLn(" (未指定错误/WIFI_REASON_UNSPECIFIED)"); break;
-        case 2: logCaptureLn(" (授权过期/WIFI_REASON_AUTH_EXPIRE)"); break;
+        case 2: logCaptureLn(" (授权过期/WIFI_REASON_AUTH_EXPIRE，请确认密码正确或是否为2.4G单频)"); break;
         case 15: logCaptureLn(" (密码错误或信号差/WIFI_REASON_4WAY_HANDSHAKE_TIMEOUT)"); break;
         case 201: logCaptureLn(" (找不到AP/WIFI_REASON_NO_AP_FOUND，请确认是2.4G网络且名字无误)"); break;
         case 202: logCaptureLn(" (授权失败/WIFI_REASON_AUTH_FAIL)"); break;
@@ -195,8 +204,10 @@ void setup() {
     enterApConfigMode();
   } else {
     logCaptureLn(String("检测到已保存的 WiFi 配置，尝试连接..."));
+    WiFi.mode(WIFI_OFF);
+    delay(200);
     WiFi.mode(WIFI_STA);
-    WiFi.setTxPower(WIFI_POWER_8_5dBm);
+    WiFi.setTxPower(WIFI_POWER_15dBm);
     WiFi.setSleep(false);
     WiFi.setAutoReconnect(true);
     
@@ -214,6 +225,12 @@ void setup() {
         break;
       }
       failedAttempts++;
+      if (failedAttempts < 3) {
+        WiFi.mode(WIFI_OFF);
+        delay(200);
+        WiFi.mode(WIFI_STA);
+        WiFi.setTxPower(WIFI_POWER_15dBm);
+      }
     }
     
     if (connected) {

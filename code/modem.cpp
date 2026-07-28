@@ -100,16 +100,24 @@ void modemInit(uint8_t modemIndex) {
   logCaptureLn(String("开始配置模组 ") + String(modemIndex) + " 参数...");
 
   int cgactRetry = 0;
-  while (!sendATandWaitOK("AT+CGACT=0,1", 5000, modemIndex)) {
-    logCaptureLn(String("设置CGACT失败，重试..."));
+  while (!sendATandWaitOK("AT+CGACT=1,1", 5000, modemIndex)) {
+    logCaptureLn(String("激活CGACT失败，重试..."));
     blink_short();
     cgactRetry++;
     if (cgactRetry >= 5) {
-      logCaptureLn(String("⚠️ 设置CGACT失败次数过多，继续初始化..."));
+      logCaptureLn(String("⚠️ 激活CGACT失败次数过多，继续初始化..."));
       break;
     }
   }
-  logCaptureLn(String("已禁用模组 ") + String(modemIndex) + " 数据连接(AT+CGACT=0,1)，防止流量消耗");
+  logCaptureLn(String("模组 ") + String(modemIndex) + " CGACT网络附着/数据连接已激活 (AT+CGACT=1,1)");
+
+  // 设置短信发送服务域（2=PS域优先，CS/SGs域自动回落备用），清空模组 NVS 中的错误配置
+  sendATandWaitOK("AT+CGSMS=2", 1000, modemIndex);
+  logCaptureLn(String("模组 ") + String(modemIndex) + " 短信发送服务域已同步为: AT+CGSMS=2");
+
+  String csca = sendATCommand("AT+CSCA?", 2000, modemIndex);
+  csca.trim();
+  logCaptureLn(String("模组 ") + String(modemIndex) + " CSCA短信中心: " + csca);
 
   int cnmiRetry = 0;
   while (!sendATandWaitOK("AT+CNMI=2,2,0,0,0", 1000, modemIndex)) {
@@ -204,7 +212,7 @@ bool waitCEREG(uint8_t modemIndex) {
   return false;
 }
 
-// 发送短信（PDU模式）
+// 发送短信（标准 PDU 模式）
 bool sendSMS(const char* phoneNumber, const char* message, uint8_t modemIndex) {
   logCaptureLn(String("准备通过模组 ") + String(modemIndex) + " 发送短信...");
   logCapture(String("目标号码: ")); logCaptureLn(String(phoneNumber));
@@ -212,8 +220,12 @@ bool sendSMS(const char* phoneNumber, const char* message, uint8_t modemIndex) {
 
   HardwareSerial& serial = getModemSerial(modemIndex);
 
-  // 使用pdulib编码PDU
-  pdu.setSCAnumber();  // 使用默认短信中心
+  // 开启详细错误显示与 PDU 模式
+  sendATandWaitOK("AT+CMEE=2", 1000, modemIndex);
+  sendATandWaitOK("AT+CMGF=0", 1000, modemIndex);
+
+  // 使用默认/隐式短信中心 (00 标头)，由模组内置的 CSCA 地址自动处理
+  pdu.setSCAnumber();
   int pduLen = pdu.encodePDU(phoneNumber, message);
   
   if (pduLen < 0) {
@@ -224,7 +236,7 @@ bool sendSMS(const char* phoneNumber, const char* message, uint8_t modemIndex) {
   
   logCapture(String("PDU数据: ")); logCaptureLn(String(pdu.getSMS()));
   logCapture(String("PDU长度: ")); logCaptureLn(String(pduLen));
-  
+
   // 发送AT+CMGS命令
   String cmgsCmd = "AT+CMGS=";
   cmgsCmd += pduLen;
@@ -264,11 +276,11 @@ bool sendSMS(const char* phoneNumber, const char* message, uint8_t modemIndex) {
       char c = serial.read();
       resp += c;
       logCapture(String(c));
-      if (resp.indexOf("OK") >= 0) {
+      if (resp.indexOf("OK") >= 0 || resp.indexOf("+CMGS:") >= 0) {
         logCaptureLn(String("\n短信发送成功"));
         return true;
       }
-      if (resp.indexOf("ERROR") >= 0) {
+      if (resp.indexOf("ERROR") >= 0 || resp.indexOf("+CMS ERROR") >= 0) {
         logCaptureLn(String("\n短信发送失败"));
         return false;
       }
